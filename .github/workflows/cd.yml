@@ -1,0 +1,130 @@
+name: CD
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}
+      WORKLOAD_IDENTITY_PROVIDER: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+      DEPLOY_SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}/${{ vars.CLOUD_RUN_SERVICE }}:${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Build runtime image
+        run: docker build -t "${IMAGE}" .
+
+      - name: Push runtime image
+        run: docker push "${IMAGE}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install app dependencies for Alembic
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m alembic upgrade head
+
+      - name: Render Cloud Run environment file
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          env_vars = {
+              "ENVIRONMENT": "production",
+              "DATABASE_URL": os.environ["DATABASE_URL"],
+              "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
+          }
+
+          if os.getenv("OPENAI_MODEL"):
+              env_vars["OPENAI_MODEL"] = os.environ["OPENAI_MODEL"]
+
+          if os.getenv("REDIS_URL"):
+              env_vars["REDIS_URL"] = os.environ["REDIS_URL"]
+
+          Path("cloudrun-env.yaml").write_text(
+              "".join(f"{key}: {json.dumps(value)}\n" for key, value in env_vars.items()),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${CLOUD_RUN_SERVICE}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --image "${IMAGE}" \
+            --port 8000 \
+            --env-vars-file cloudrun-env.yaml \
+            --quiet
+
+      - name: Resolve service URL
+        id: service-url
+        run: |
+          echo "url=$(gcloud run services describe "${CLOUD_RUN_SERVICE}" --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format='value(status.url)')" >> "${GITHUB_OUTPUT}"
+
+      - name: Mint identity token for private health check
+        id: identity-token
+        run: |
+          echo "token=$(gcloud auth print-identity-token --audiences='${{ steps.service-url.outputs.url }}')" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify deployed health endpoint
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${{ steps.identity-token.outputs.token }}" \
+              "${{ steps.service-url.outputs.url }}/health"; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Health check failed for ${CLOUD_RUN_SERVICE}" >&2
+          exit 1

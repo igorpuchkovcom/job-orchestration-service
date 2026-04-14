@@ -17,31 +17,49 @@ The automated path is fake-first and does not require live OpenAI credentials or
 
 ### Fake-first automated path
 
-- PostgreSQL
-- `DATABASE_URL`
+- Python 3.13 host environment with dependencies installed
+- local PostgreSQL from `docker compose up -d`
+- `.env` created from `.env.example`
 
 ### Optional live-provider path
 
-- PostgreSQL
-- `DATABASE_URL`
+- Python 3.13 host environment with dependencies installed
+- local PostgreSQL from `docker compose up -d`
+- `.env` created from `.env.example`
 - `OPENAI_API_KEY`
 - optional `OPENAI_MODEL`
-- optional `REDIS_URL`
+- local Redis is recommended and is part of the canonical local environment
 
-Redis is not required for the fake-first path.
+The canonical local environment is:
+
+- host Python for the app
+- `docker compose` for PostgreSQL and Redis only
+- `.env` for local settings
 
 ## Fake-First Automated Path
 
-Start a disposable PostgreSQL instance:
+Start the canonical local dependencies:
 
 ```powershell
-docker run --rm -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_USER=postgres -e POSTGRES_DB=job_api_test -p 55432:5432 --name job-api-test-db postgres:16
+docker compose up -d
+```
+
+Copy the env template if you have not already:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Run migrations:
+
+```powershell
+.\.venv\Scripts\python -m alembic upgrade head
 ```
 
 Run the end-to-end proof:
 
 ```powershell
-$env:DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:55432/job_api_test'
+$env:DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:5432/job_orchestration_service'
 .\.venv\Scripts\python -m pytest tests/integration/api/test_demo_flow.py
 ```
 
@@ -54,26 +72,37 @@ Expected outcome:
 
 ## Local Run Path
 
-Use the existing host Python environment for a practical local boot path.
+Use the canonical host-Python plus Docker Compose path.
 
-Set the database URL and run migrations:
+Start the local dependencies:
 
 ```powershell
-$env:DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:55432/job_api_test'
+docker compose up -d
+```
+
+Create `.env` from the checked-in template if needed:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Run migrations:
+
+```powershell
 .\.venv\Scripts\python -m alembic upgrade head
 ```
 
 Start the app:
 
 ```powershell
-.\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8004
+.\.venv\Scripts\python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Confirm the app is reachable:
 
 ```powershell
-Invoke-WebRequest http://127.0.0.1:8004/health
-Invoke-WebRequest http://127.0.0.1:8004/openapi.json
+Invoke-WebRequest http://127.0.0.1:8000/health
+Invoke-WebRequest http://127.0.0.1:8000/openapi.json
 ```
 
 ## Docker Run Path
@@ -114,16 +143,15 @@ This path is optional and is not part of the automated proof.
 Set the provider env vars before starting the local app:
 
 ```powershell
-$env:OPENAI_API_KEY='your-key'
-$env:OPENAI_MODEL='gpt-4o-mini'
+$env:OPENAI_API_KEY='your-key'; $env:OPENAI_MODEL='gpt-4o-mini'
 ```
 
 Create, start, and fetch a job against the running local app:
 
 ```powershell
-$create = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8004/jobs -ContentType 'application/json' -Body '{"input":{"prompt":"demo"}}'
-$started = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8004/jobs/$($create.id)/start"
-$job = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8004/jobs/$($create.id)"
+$create = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/jobs -ContentType 'application/json' -Body '{"input":{"prompt":"demo"}}'
+$started = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/jobs/$($create.id)/start"
+$job = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/jobs/$($create.id)"
 ```
 
 Expected outcome:

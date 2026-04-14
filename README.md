@@ -49,10 +49,17 @@ For the detailed walkthrough, see [`docs/demo-flow.md`](docs/demo-flow.md).
 
 ## Quick Setup
 
-Local development targets Python 3.11+. The current Docker image uses Python 3.13.
+The canonical local development path uses host Python plus Docker Compose for PostgreSQL and Redis.
+Use Python 3.13 locally to match the existing Docker image.
 
 ```bash
-python -m venv .venv
+python3.13 -m venv .venv
+```
+
+PowerShell equivalent:
+
+```powershell
+py -3.13 -m venv .venv
 ```
 
 Activate the environment:
@@ -67,32 +74,58 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
+Create a local env file from the template:
+
+```bash
+cp .env.example .env
+```
+
+PowerShell equivalent:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Start local dependencies:
+
+```bash
+docker compose up -d
+```
+
 ## Configuration
+
+The app reads local settings from `.env`. Keep `.env.example` as the source-of-truth template and customize `.env` for your machine.
 
 Common settings for local work:
 
+- `ENVIRONMENT`: optional, defaults to `development`
 - `DATABASE_URL`: required for local runs, migrations, and DB-backed tests
+- `REDIS_URL`: recommended for local development and required for Redis-backed integration coverage
+- `REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
 - `OPENAI_API_KEY`: only required for the optional live-provider path
 - `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
-- `REDIS_URL`: optional for the main fake-first demo path, but required for Redis-backed integration coverage
-- `REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
+
+The checked-in `.env.example` is wired for the default local Docker Compose services:
+
+- PostgreSQL: `127.0.0.1:5432`
+- Redis: `127.0.0.1:6379`
 
 ## Database And Migrations
 
-Set `DATABASE_URL` explicitly, then run migrations:
+With local dependencies running and `.env` in place, run migrations:
 
 ```bash
 python -m alembic upgrade head
 ```
 
-Alembic resolves the database URL from `DATABASE_URL`.
+Alembic resolves the database URL from `DATABASE_URL` in `.env`.
 
 ## Local Run
 
-With PostgreSQL running and migrations applied:
+With PostgreSQL and Redis running and migrations applied:
 
 ```bash
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Useful endpoints:
@@ -100,6 +133,23 @@ Useful endpoints:
 - `GET /health`
 - `GET /docs`
 - `GET /openapi.json`
+
+## Canonical Local Flow
+
+1. Create and activate a Python 3.13 virtual environment.
+2. Install dependencies with `python -m pip install -e ".[dev]"`.
+3. Copy `.env.example` to `.env`.
+4. Start PostgreSQL and Redis with `docker compose up -d`.
+5. Run migrations with `python -m alembic upgrade head`.
+6. Start the app with `python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`.
+7. Verify the environment with `GET /health` or `python -m pytest tests/integration/api/test_demo_flow.py`.
+
+For the integration test path on PowerShell, export `DATABASE_URL` in the current shell before running pytest:
+
+```powershell
+$env:DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:5432/job_orchestration_service'
+.\.venv\Scripts\python -m pytest tests/integration/api/test_demo_flow.py
+```
 
 ## Docker Run
 
@@ -123,12 +173,12 @@ Migrations are not baked into the current image.
 - Lint: `python -m ruff check .`
 - Unit tests: `python -m pytest tests/unit`
 - Minimal fake-first demo proof: `python -m pytest tests/integration/api/test_demo_flow.py`
-  - requires PostgreSQL and `DATABASE_URL`
+  - works with the canonical local Docker Compose PostgreSQL service
   - does not require `OPENAI_API_KEY`
   - does not require Redis
 - Broader integration coverage: `python -m pytest tests/integration`
   - requires PostgreSQL
-  - some Redis-backed tests also require `REDIS_URL`
+  - Redis-backed tests require `REDIS_URL`, which the canonical `.env` + Docker Compose setup provides
 
 ## Deliberate Simplifications And Trade-Offs
 

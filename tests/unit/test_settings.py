@@ -2,7 +2,7 @@ from app.core.config import Settings
 
 
 def test_settings_defaults() -> None:
-    settings = Settings()
+    settings = Settings(_env_file=None)
 
     assert settings.app_name == "Job Orchestration Service"
     assert settings.environment == "development"
@@ -20,7 +20,7 @@ def test_settings_reads_environment_variables(monkeypatch) -> None:
     monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
     monkeypatch.setenv("REDIS_START_GUARD_TTL_SECONDS", "45")
 
-    settings = Settings()
+    settings = Settings(_env_file=None)
 
     assert settings.app_name == "job-orchestration-service-test"
     assert settings.environment == "test"
