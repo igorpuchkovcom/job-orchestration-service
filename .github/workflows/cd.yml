@@ -16,6 +16,8 @@ permissions:
 jobs:
   deploy:
     # Normal code deploys come from successful CI runs on `main`.
+    # Terraform under `infra/` owns the long-lived Cloud Run baseline; this workflow
+    # intentionally keeps ownership of release-time image rollout, migrations, and health checks.
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

@@ -17,3 +17,10 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+infra/.terraform/
+infra/.terraform.tfstate.lock.info
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfplan
+infra/*.auto.tfvars
+infra/terraform.tfvars
