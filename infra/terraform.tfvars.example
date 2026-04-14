@@ -1,0 +1,7 @@
+project_id                  = "my-gcp-project"
+region                      = "us-central1"
+service_name                = "job-orchestration-service"
+artifact_registry_repository = "job-orchestration-service"
+runtime_service_account_id  = "job-orchestration-service-runtime"
+deploy_service_account_email = "github-deploy@my-gcp-project.iam.gserviceaccount.com"
+container_image             = "us-central1-docker.pkg.dev/my-gcp-project/job-orchestration-service/job-orchestration-service:bootstrap"
