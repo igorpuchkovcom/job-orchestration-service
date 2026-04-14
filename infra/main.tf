@@ -34,7 +34,7 @@ resource "google_service_account_iam_member" "deploy_can_use_runtime_service_acc
 resource "google_artifact_registry_repository_iam_member" "deploy_writer" {
   project    = var.project_id
   location   = var.region
-  repository = var.artifact_registry_repository
+  repository = google_artifact_registry_repository.app.repository_id
   role       = "roles/artifactregistry.writer"
   member     = local.deploy_service_account_member
 }
