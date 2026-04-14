@@ -24,7 +24,7 @@ It is a deliberate Python reimplementation optimized for backend architecture, o
 - `app/manifests/`: demo-friendly result shaping
 - `app/core/`: settings and app wiring
 
-This is intentionally small: one main happy path, one real provider, one bounded result view, and no worker platform or deployment framework.
+This is intentionally small: one main happy path, one real provider, one bounded result view, and no worker platform or platform-scale deployment framework.
 
 ## Main End-To-End Flow
 
@@ -180,6 +180,36 @@ Migrations are not baked into the current image.
   - requires PostgreSQL
   - Redis-backed tests require `REDIS_URL`, which the canonical `.env` + Docker Compose setup provides
 
+## Local Hooks
+
+The `dev` extra includes `pre-commit`, which this repo uses for a small local quality gate.
+
+Install the hooks after setting up the virtual environment and dev dependencies:
+
+```bash
+python -m pre_commit install
+```
+
+The configured hooks stay intentionally small:
+
+- commit-time hook: `python -m ruff check --fix` on Python files
+- push-time hook: `python -m pytest tests/unit`
+
+These hooks are fast local checks only. They complement CI, but they do not replace it. The full remote gate for merge and deploy remains `CI / ci`.
+
+## Branch And Deploy Policy
+
+This repo uses a deliberately small governance model around `main`:
+
+- `main` is the only deploy branch.
+- Normal development should happen on short-lived feature branches.
+- Pull requests are the normal path into `main`.
+- The required remote gate for `main` is the existing `CI / ci` workflow check.
+- Merging into `main` is what triggers deployment through the `CD` workflow.
+- Direct pushes to `main` are not part of normal development.
+- `workflow_dispatch` on the `CD` workflow is reserved for manual redeploy or break-glass use from `main`.
+- This is intentionally a small-repo branch/deploy policy, not a multi-environment release program.
+
 ## Deliberate Simplifications And Trade-Offs
 
 - synchronous start execution instead of background workers or queues
@@ -187,7 +217,7 @@ Migrations are not baked into the current image.
 - one real LLM provider first instead of a provider matrix
 - Redis used as a bounded duplicate-start guard, not generalized workflow state
 - a small `result_summary` read model instead of a larger artifact or manifest platform
-- no exact source parity, infrastructure parity, or production auth/deployment story
+- no exact source parity, infrastructure parity, or platform-scale deployment/governance program
 
 ## How To Talk About It In An Interview
 
