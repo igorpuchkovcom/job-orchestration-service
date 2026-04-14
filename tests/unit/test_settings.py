@@ -1,7 +1,18 @@
 from app.core.config import Settings
 
 
-def test_settings_defaults() -> None:
+def test_settings_defaults(monkeypatch) -> None:
+    # BaseSettings still reads os.environ when _env_file=None; isolate from CI/local env.
+    for key in (
+        "APP_NAME",
+        "ENVIRONMENT",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL",
+        "REDIS_URL",
+        "REDIS_START_GUARD_TTL_SECONDS",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "Job Orchestration Service"
