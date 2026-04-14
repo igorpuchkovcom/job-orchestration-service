@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "showcase-python"
+version = "0.1.0"
+description = "Interview-worthy Python backend showcase inspired by a production orchestration system."
+requires-python = ">=3.11"
+dependencies = [
+  "alembic",
+  "fastapi",
+  "openai",
+  "pydantic-settings",
+  "psycopg[binary]",
+  "redis",
+  "sqlalchemy",
+  "uvicorn",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx",
+  "pytest",
+  "ruff",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
