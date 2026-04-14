@@ -219,14 +219,6 @@ This repo uses a deliberately small governance model around `main`:
 - a small `result_summary` read model instead of a larger artifact or manifest platform
 - no exact source parity, infrastructure parity, or platform-scale deployment/governance program
 
-## How To Talk About It In An Interview
-
-- Frame it as a deliberate reimplementation inspired by a real orchestration domain, not as a production migration.
-- Walk through the main flow: create -> start -> get -> inspect `result_summary` and raw `steps`.
-- Highlight the boundaries: thin API layer, orchestration core, provider interface, persistence layer, Redis guard, and read-time result shaping.
-- Call out the fake-first testing strategy as an engineering choice: stable automation by default, optional live-provider usage when credentials exist.
-- Explain what you would add next for a broader system: background execution, richer pipelines, additional providers, and a stronger runtime/deployment story.
-
 ## Further Reading
 
 - detailed demo walkthrough: [`docs/demo-flow.md`](docs/demo-flow.md)
