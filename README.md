@@ -1,6 +1,6 @@
-# showcase-python
+# job-orchestration-service
 
-`showcase-python` is a small FastAPI backend inspired by a production orchestration system.
+`job-orchestration-service` is a small FastAPI backend inspired by a production orchestration system.
 
 It is a deliberate Python reimplementation optimized for backend architecture, orchestration flow, and interview discussion value rather than exact migration fidelity or production completeness.
 
@@ -71,21 +71,21 @@ python -m pip install -e ".[dev]"
 
 Common settings for local work:
 
-- `SHOWCASE_DATABASE_URL`: required for local runs, migrations, and DB-backed tests
-- `SHOWCASE_OPENAI_API_KEY`: only required for the optional live-provider path
-- `SHOWCASE_OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
-- `SHOWCASE_REDIS_URL`: optional for the main fake-first demo path, but required for Redis-backed integration coverage
-- `SHOWCASE_REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
+- `DATABASE_URL`: required for local runs, migrations, and DB-backed tests
+- `OPENAI_API_KEY`: only required for the optional live-provider path
+- `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
+- `REDIS_URL`: optional for the main fake-first demo path, but required for Redis-backed integration coverage
+- `REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
 
 ## Database And Migrations
 
-Set `SHOWCASE_DATABASE_URL` explicitly, then run migrations:
+Set `DATABASE_URL` explicitly, then run migrations:
 
 ```bash
 python -m alembic upgrade head
 ```
 
-Alembic resolves the database URL from `SHOWCASE_DATABASE_URL`.
+Alembic resolves the database URL from `DATABASE_URL`.
 
 ## Local Run
 
@@ -106,14 +106,14 @@ Useful endpoints:
 Build the image:
 
 ```bash
-docker build -t showcase-python .
+docker build -t job-orchestration-service .
 ```
 
 The current Docker path is intentionally small:
 
 - start a separate PostgreSQL instance
 - run `python -m alembic upgrade head` from the host against that database
-- run the app container with `SHOWCASE_DATABASE_URL` pointing at the database
+- run the app container with `DATABASE_URL` pointing at the database
 - use [`docs/demo-flow.md`](docs/demo-flow.md) for the exact disposable Docker walkthrough
 
 Migrations are not baked into the current image.
@@ -123,12 +123,12 @@ Migrations are not baked into the current image.
 - Lint: `python -m ruff check .`
 - Unit tests: `python -m pytest tests/unit`
 - Minimal fake-first demo proof: `python -m pytest tests/integration/api/test_demo_flow.py`
-  - requires PostgreSQL and `SHOWCASE_DATABASE_URL`
-  - does not require `SHOWCASE_OPENAI_API_KEY`
+  - requires PostgreSQL and `DATABASE_URL`
+  - does not require `OPENAI_API_KEY`
   - does not require Redis
 - Broader integration coverage: `python -m pytest tests/integration`
   - requires PostgreSQL
-  - some Redis-backed tests also require `SHOWCASE_REDIS_URL`
+  - some Redis-backed tests also require `REDIS_URL`
 
 ## Deliberate Simplifications And Trade-Offs
 

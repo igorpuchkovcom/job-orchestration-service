@@ -13,16 +13,16 @@ def test_settings_defaults() -> None:
 
 
 def test_settings_reads_environment_variables(monkeypatch) -> None:
-    monkeypatch.setenv("SHOWCASE_APP_NAME", "showcase-python-test")
-    monkeypatch.setenv("SHOWCASE_ENVIRONMENT", "test")
-    monkeypatch.setenv("SHOWCASE_OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("SHOWCASE_OPENAI_MODEL", "gpt-4o-mini-test")
-    monkeypatch.setenv("SHOWCASE_REDIS_URL", "redis://127.0.0.1:6379/0")
-    monkeypatch.setenv("SHOWCASE_REDIS_START_GUARD_TTL_SECONDS", "45")
+    monkeypatch.setenv("APP_NAME", "job-orchestration-service-test")
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini-test")
+    monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    monkeypatch.setenv("REDIS_START_GUARD_TTL_SECONDS", "45")
 
     settings = Settings()
 
-    assert settings.app_name == "showcase-python-test"
+    assert settings.app_name == "job-orchestration-service-test"
     assert settings.environment == "test"
     assert settings.openai_api_key == "test-key"
     assert settings.openai_model == "gpt-4o-mini-test"

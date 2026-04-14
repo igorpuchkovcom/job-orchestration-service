@@ -1,1 +1,1 @@
-"""Core runtime utilities for the showcase service."""
+"""Core runtime utilities for the service."""

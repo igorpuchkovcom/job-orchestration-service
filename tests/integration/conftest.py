@@ -16,16 +16,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _database_url() -> str:
-    database_url = os.getenv("SHOWCASE_DATABASE_URL")
+    database_url = os.getenv("DATABASE_URL")
     if not database_url:
-        raise RuntimeError("SHOWCASE_DATABASE_URL must be set for integration tests.")
+        raise RuntimeError("DATABASE_URL must be set for integration tests.")
     return database_url
 
 
 def _redis_url() -> str:
-    redis_url = os.getenv("SHOWCASE_REDIS_URL")
+    redis_url = os.getenv("REDIS_URL")
     if not redis_url:
-        raise RuntimeError("SHOWCASE_REDIS_URL must be set for Redis-backed integration tests.")
+        raise RuntimeError("REDIS_URL must be set for Redis-backed integration tests.")
     return redis_url
 
 
@@ -38,7 +38,7 @@ def _reset_database(engine: Engine) -> None:
 @pytest.fixture
 def database_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     value = _database_url()
-    monkeypatch.setenv("SHOWCASE_DATABASE_URL", value)
+    monkeypatch.setenv("DATABASE_URL", value)
     get_settings.cache_clear()
     reset_db_state()
     try:
@@ -51,7 +51,7 @@ def database_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
 @pytest.fixture
 def redis_url(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     value = _redis_url()
-    monkeypatch.setenv("SHOWCASE_REDIS_URL", value)
+    monkeypatch.setenv("REDIS_URL", value)
     get_settings.cache_clear()
     reset_db_state()
     try:

@@ -1,1 +1,1 @@
-"""Application package for the showcase Python service."""
+"""Application package for the Python service."""
