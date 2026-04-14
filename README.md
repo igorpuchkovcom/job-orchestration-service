@@ -1,40 +1,38 @@
 # job-orchestration-service
 
-`job-orchestration-service` is a small FastAPI backend inspired by a production orchestration system.
+`job-orchestration-service` is a FastAPI backend for a bounded job-oriented orchestration flow. It exposes a small HTTP API for creating, starting, and querying jobs, persists job and step state in PostgreSQL, executes a provider-backed orchestration step, and returns both raw step data and a small `result_summary` view.
 
-It is a deliberate Python reimplementation optimized for backend architecture, orchestration flow, and interview discussion value rather than exact migration fidelity or production completeness.
+This repository is a deliberately scoped Python reimplementation of the core ideas from a larger orchestration service. It focuses on one coherent service path and a credible operational baseline rather than exact source parity or platform-scale breadth.
 
-## What This Repo Demonstrates
+## Core Capabilities
 
-- a bounded job API with `POST /jobs`, `POST /jobs/{job_id}/start`, `GET /jobs/{job_id}`, and `GET /health`
-- an orchestration-centric application core with explicit job lifecycle ownership
-- persisted job and step state using SQLAlchemy and Alembic
-- a real provider boundary with one OpenAI implementation
-- a bounded Redis-backed duplicate-start guard
-- a small read-time `result_summary` alongside raw execution `steps`
-- a fake-first end-to-end demo path that is credible without live API keys
+- job lifecycle endpoints: `POST /jobs`, `POST /jobs/{job_id}/start`, `GET /jobs/{job_id}`, and `GET /health`
+- persisted job and step lifecycle state via SQLAlchemy and Alembic
+- provider-backed execution through a clear LLM provider boundary
+- bounded Redis-backed duplicate-start coordination
+- read-time `result_summary` alongside raw execution `steps`
+- local development, CI, CD, and a small Terraform baseline for one Cloud Run environment
 
-## Architecture At A Glance
+## Architecture Overview
 
-- `app/api/`: thin HTTP routes and response schemas
-- `app/orchestration/`: job lifecycle, step execution, and composition of providers, persistence, state, and result shaping
-- `app/persistence/`: SQLAlchemy models, DB wiring, and repositories
-- `app/providers/`: provider contract plus the OpenAI adapter
-- `app/state/`: bounded Redis start-guard logic
-- `app/manifests/`: demo-friendly result shaping
-- `app/core/`: settings and app wiring
+- `app/api/`: HTTP routes and response schemas
+- `app/orchestration/`: job lifecycle ownership and execution pipeline
+- `app/persistence/`: SQLAlchemy models, session wiring, and repositories
+- `app/providers/`: provider contract and implementations
+- `app/state/`: Redis-backed coordination helpers
+- `app/manifests/`: bounded result shaping
+- `app/core/`: settings and application wiring
 
-This is intentionally small: one main happy path, one real provider, one bounded result view, and no worker platform or platform-scale deployment framework.
+API handlers stay thin. Orchestration owns state transitions and execution. Persistence, provider access, and Redis coordination are kept behind explicit boundaries.
 
-## Main End-To-End Flow
+## Main Flow
 
-1. Create a job with `POST /jobs`.
-2. Start orchestration with `POST /jobs/{job_id}/start`.
-3. The orchestration service executes one provider-backed step and persists job and step state.
-4. Fetch the completed job with `GET /jobs/{job_id}`.
-5. Inspect both the concise `result_summary` and the raw `steps`.
+1. Create a job with an input payload.
+2. Start the job.
+3. The orchestration layer executes the provider-backed step and persists the resulting job and step state.
+4. Retrieve the completed job and inspect both `result_summary` and raw `steps`.
 
-For the detailed walkthrough, see [`docs/demo-flow.md`](docs/demo-flow.md).
+For a supporting runbook of the create/start/get path, see [`docs/demo-flow.md`](docs/demo-flow.md).
 
 ## Tech Stack
 
@@ -44,181 +42,125 @@ For the detailed walkthrough, see [`docs/demo-flow.md`](docs/demo-flow.md).
 - PostgreSQL
 - Redis
 - OpenAI Python SDK
-- pytest and ruff
+- pytest, ruff, and pre-commit
 - Docker
+- GitHub Actions
+- Terraform
 
-## Quick Setup
+## Local Development
 
-The canonical local development path uses host Python plus Docker Compose for PostgreSQL and Redis.
-Use Python 3.13 locally to match the existing Docker image.
+The canonical local path uses host Python plus Docker Compose for PostgreSQL and Redis.
 
-```bash
-python3.13 -m venv .venv
-```
+### Prerequisites
 
-PowerShell equivalent:
+- Python 3.13
+- Docker / Docker Compose
 
-```powershell
-py -3.13 -m venv .venv
-```
-
-Activate the environment:
-
-- PowerShell: `.\.venv\Scripts\Activate.ps1`
-- bash/zsh: `source .venv/bin/activate`
-
-Install the project and dev tools:
+### Setup
 
 ```bash
+python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
-```
-
-Create a local env file from the template:
-
-```bash
 cp .env.example .env
-```
-
-PowerShell equivalent:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Start local dependencies:
-
-```bash
 docker compose up -d
-```
-
-## Configuration
-
-The app reads local settings from `.env`. Keep `.env.example` as the source-of-truth template and customize `.env` for your machine.
-
-Common settings for local work:
-
-- `ENVIRONMENT`: optional, defaults to `development`
-- `DATABASE_URL`: required for local runs, migrations, and DB-backed tests
-- `REDIS_URL`: recommended for local development and required for Redis-backed integration coverage
-- `REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
-- `OPENAI_API_KEY`: only required for the optional live-provider path
-- `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
-
-The checked-in `.env.example` is wired for the default local Docker Compose services:
-
-- PostgreSQL: `127.0.0.1:5432`
-- Redis: `127.0.0.1:6379`
-
-## Database And Migrations
-
-With local dependencies running and `.env` in place, run migrations:
-
-```bash
 python -m alembic upgrade head
 ```
 
-Alembic resolves the database URL from `DATABASE_URL` in `.env`.
+On PowerShell, use `py -3.13 -m venv .venv` and `Copy-Item .env.example .env`.
 
-## Local Run
-
-With PostgreSQL and Redis running and migrations applied:
+### Run The Service
 
 ```bash
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Useful endpoints:
+Useful local endpoints:
 
 - `GET /health`
 - `GET /docs`
 - `GET /openapi.json`
 
-## Canonical Local Flow
+Common local configuration lives in `.env`:
 
-1. Create and activate a Python 3.13 virtual environment.
-2. Install dependencies with `python -m pip install -e ".[dev]"`.
-3. Copy `.env.example` to `.env`.
-4. Start PostgreSQL and Redis with `docker compose up -d`.
-5. Run migrations with `python -m alembic upgrade head`.
-6. Start the app with `python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000`.
-7. Verify the environment with `GET /health` or `python -m pytest tests/integration/api/test_demo_flow.py`.
+- `DATABASE_URL`: required for local runs, migrations, and DB-backed tests
+- `REDIS_URL`: recommended for local development and Redis-backed integration coverage
+- `REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
+- `OPENAI_API_KEY`: only required for the live provider path
+- `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
+- `ENVIRONMENT`: optional, defaults to `development`
 
-For the integration test path on PowerShell, export `DATABASE_URL` in the current shell before running pytest:
+The checked-in `.env.example` is wired for the default local Docker Compose services on `127.0.0.1`.
 
-```powershell
-$env:DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:5432/job_orchestration_service'
-.\.venv\Scripts\python -m pytest tests/integration/api/test_demo_flow.py
-```
+The repo also includes a small runtime image in `Dockerfile`. For a disposable container runbook, see [`docs/demo-flow.md`](docs/demo-flow.md).
 
-## Docker Run
+## Testing And Quality Gates
 
-Build the image:
+Local test and quality commands:
 
-```bash
-docker build -t job-orchestration-service .
-```
+- lint: `python -m ruff check .`
+- unit tests: `python -m pytest tests/unit`
+- integration tests: `python -m pytest tests/integration`
+- narrow create/start/get proof: `python -m pytest tests/integration/api/test_demo_flow.py`
 
-The current Docker path is intentionally small:
-
-- start a separate PostgreSQL instance
-- run `python -m alembic upgrade head` from the host against that database
-- run the app container with `DATABASE_URL` pointing at the database
-- use [`docs/demo-flow.md`](docs/demo-flow.md) for the exact disposable Docker walkthrough
-
-Migrations are not baked into the current image.
-
-## Testing
-
-- Lint: `python -m ruff check .`
-- Unit tests: `python -m pytest tests/unit`
-- Minimal fake-first demo proof: `python -m pytest tests/integration/api/test_demo_flow.py`
-  - works with the canonical local Docker Compose PostgreSQL service
-  - does not require `OPENAI_API_KEY`
-  - does not require Redis
-- Broader integration coverage: `python -m pytest tests/integration`
-  - requires PostgreSQL
-  - Redis-backed tests require `REDIS_URL`, which the canonical `.env` + Docker Compose setup provides
-
-## Local Hooks
-
-The `dev` extra includes `pre-commit`, which this repo uses for a small local quality gate.
-
-Install the hooks after setting up the virtual environment and dev dependencies:
+Local hooks use `pre-commit`:
 
 ```bash
 python -m pre_commit install
 ```
 
-The configured hooks stay intentionally small:
+Configured local hooks:
 
 - commit-time hook: `python -m ruff check --fix` on Python files
 - push-time hook: `python -m pytest tests/unit`
 
-These hooks are fast local checks only. They complement CI, but they do not replace it. The full remote gate for merge and deploy remains `CI / ci`.
+These hooks are intentionally small. They complement CI, but they do not replace it.
 
-## Branch And Deploy Policy
+The main remote quality gate is `CI / ci`, which runs on pull requests and pushes to `main` and executes:
 
-This repo uses a deliberately small governance model around `main`:
+- `ruff`
+- unit tests
+- integration tests
+- Docker image build
+
+## Deployment Overview
 
 - `main` is the only deploy branch.
-- Normal development should happen on short-lived feature branches.
 - Pull requests are the normal path into `main`.
-- The required remote gate for `main` is the existing `CI / ci` workflow check.
-- Merging into `main` is what triggers deployment through the `CD` workflow.
-- Direct pushes to `main` are not part of normal development.
-- `workflow_dispatch` on the `CD` workflow is reserved for manual redeploy or break-glass use from `main`.
-- This is intentionally a small-repo branch/deploy policy, not a multi-environment release program.
+- Successful `CI` on `main` triggers `CD`.
+- `CD` builds and pushes the runtime image, runs `python -m alembic upgrade head`, deploys to Cloud Run, and verifies authenticated `/health`.
+- `workflow_dispatch` is reserved for manual redeploy or break-glass use from `main`.
+- Runtime configuration for the current MVP still comes from GitHub Actions variables and secrets.
 
-## Deliberate Simplifications And Trade-Offs
+The runtime image is intentionally separate from migration execution. Alembic remains a deploy-time responsibility rather than an image-startup responsibility.
 
-- synchronous start execution instead of background workers or queues
-- one fixed provider-backed step instead of a broad multi-step pipeline
-- one real LLM provider first instead of a provider matrix
-- Redis used as a bounded duplicate-start guard, not generalized workflow state
-- a small `result_summary` read model instead of a larger artifact or manifest platform
-- no exact source parity, infrastructure parity, or platform-scale deployment/governance program
+## Infrastructure Ownership Model
 
-## Further Reading
+Terraform under `infra/` owns the long-lived deployment baseline:
 
-- detailed demo walkthrough: [`docs/demo-flow.md`](docs/demo-flow.md)
+- Artifact Registry repository
+- Cloud Run service baseline
+- runtime service account
+- minimum IAM needed for the current deploy path
+
+CD continues to own release-time actions:
+
+- image build and push
+- Alembic execution
+- `gcloud run deploy`
+- post-deploy health verification
+
+The IaC path is intentionally one-environment and import-first. See [`infra/README.md`](infra/README.md) for required variables, import guidance, and the Terraform/CD ownership split.
+
+## Scope And Limitations
+
+- The orchestration flow is intentionally bounded to one fixed provider-backed step instead of the broader planner/executor/evaluator breadth of the original system.
+- The repo includes one concrete provider implementation rather than a provider matrix.
+- Redis is used only for duplicate-start coordination, not as a generalized workflow state system.
+- Terraform intentionally excludes database provisioning, Redis provisioning, multi-environment rollout, and broader platform resources.
+- This repo is a bounded reimplementation of the service shape and operational model, not a claim of exact production parity.
+
+## Supporting Docs
+
+- [`docs/demo-flow.md`](docs/demo-flow.md): create/start/get runbook and disposable Docker path
+- [`infra/README.md`](infra/README.md): Terraform ownership, required variables, and import-first workflow
