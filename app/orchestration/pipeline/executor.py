@@ -3,6 +3,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
+from app.core.job_events import JobEventType
+from app.core.job_lifecycle import JobStatus, JobStepStatus, ensure_job_transition
 from app.orchestration.pipeline.steps import FIXED_FLOW
 from app.persistence.repositories.job_repository import JobRepository
 from app.providers.llm.openai_provider import LLMGenerationResult, LLMProvider
@@ -20,17 +22,24 @@ class OrchestrationExecutor:
         if job is None:
             raise LookupError(f"Job not found: {job_id}")
 
-        if job.status != "pending":
-            raise ValueError(f"Job cannot be started from status: {job.status}")
+        ensure_job_transition(job.status, JobStatus.RUNNING)
 
-        self.repository.update_job_status(job_id, status="running", started_at=datetime.now(UTC))
+        self.repository.update_job_status(
+            job_id,
+            status=JobStatus.RUNNING,
+            started_at=datetime.now(UTC),
+        )
+        self.repository.create_job_event(
+            job_id,
+            event_type=JobEventType.JOB_STARTED.value,
+        )
 
         for index, step_definition in enumerate(FIXED_FLOW, start=1):
             job_step = self.repository.create_job_step(
                 job_id,
                 step_key=step_definition.step_key,
                 step_index=index,
-                status="running",
+                status=JobStepStatus.RUNNING,
             )
 
             try:
@@ -40,28 +49,37 @@ class OrchestrationExecutor:
             except Exception as error:
                 self.repository.update_job_step(
                     job_step.id,
-                    status="failed",
+                    status=JobStepStatus.FAILED,
                     output_payload=None,
                     error_payload=self._build_error_payload(error),
                 )
                 self.repository.update_job_status(
                     job_id,
-                    status="failed",
+                    status=JobStatus.FAILED,
                     completed_at=datetime.now(UTC),
+                )
+                self.repository.create_job_event(
+                    job_id,
+                    event_type=JobEventType.JOB_FAILED.value,
+                    event_payload=self._build_error_payload(error),
                 )
                 return
 
             self.repository.update_job_step(
                 job_step.id,
-                status="completed",
+                status=JobStepStatus.COMPLETED,
                 output_payload=self._build_output_payload(generation),
                 error_payload=None,
             )
 
         self.repository.update_job_status(
             job_id,
-            status="completed",
+            status=JobStatus.COMPLETED,
             completed_at=datetime.now(UTC),
+        )
+        self.repository.create_job_event(
+            job_id,
+            event_type=JobEventType.JOB_COMPLETED.value,
         )
 
     @staticmethod

@@ -10,6 +10,7 @@ This runbook walks through one bounded end-to-end flow for the service:
 - start the job
 - retrieve the completed job
 - confirm the final response contains both a non-null `result_summary` and visible raw `steps`
+- demonstrate the versioned API path and demo RBAC headers
 
 The automated path is fake-first and does not require live OpenAI credentials or network access.
 
@@ -66,7 +67,7 @@ $env:DATABASE_URL='postgresql+psycopg://postgres:postgres@127.0.0.1:5432/job_orc
 Expected outcome:
 
 - the test passes without `OPENAI_API_KEY`
-- the flow proves `POST /jobs` -> `POST /jobs/{job_id}/start` -> `GET /jobs/{job_id}`
+- the flow proves `POST /api/v1/jobs` -> `POST /api/v1/jobs/{job_id}/start` -> `GET /api/v1/jobs/{job_id}`
 - the completed response includes non-null `result_summary`
 - raw `steps` remain visible
 
@@ -101,8 +102,31 @@ Start the app:
 Confirm the app is reachable:
 
 ```powershell
-Invoke-WebRequest http://127.0.0.1:8000/health
+Invoke-WebRequest http://127.0.0.1:8000/api/v1/health
 Invoke-WebRequest http://127.0.0.1:8000/openapi.json
+$headers = @{
+  "X-Demo-Role" = "operator"
+  "X-Demo-Principal" = "local-demo"
+}
+
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/jobs -Headers $headers -ContentType 'application/json' -Body '{"input":{"prompt":"demo"}}'
+```
+
+Use a viewer role for read-only fetches if you want to verify RBAC boundaries:
+
+```powershell
+$viewerHeaders = @{
+  "X-Demo-Role" = "viewer"
+  "X-Demo-Principal" = "local-viewer"
+}
+
+Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/api/v1/jobs/<job_id>" -Headers $viewerHeaders
+```
+
+Confirm the versioned health endpoint:
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000/api/v1/health
 ```
 
 ## Docker Run Path
@@ -133,7 +157,7 @@ docker run --rm -d --network job-api-runbook-net -p 8005:8000 -e DATABASE_URL='p
 Confirm the containerized app is reachable:
 
 ```powershell
-Invoke-WebRequest http://127.0.0.1:8005/health
+Invoke-WebRequest http://127.0.0.1:8005/api/v1/health
 ```
 
 ## Optional Live-Provider Variant
@@ -149,9 +173,19 @@ $env:OPENAI_API_KEY='your-key'; $env:OPENAI_MODEL='gpt-4o-mini'
 Create, start, and fetch a job against the running local app:
 
 ```powershell
-$create = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/jobs -ContentType 'application/json' -Body '{"input":{"prompt":"demo"}}'
-$started = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/jobs/$($create.id)/start"
-$job = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/jobs/$($create.id)"
+$operatorHeaders = @{
+  "X-Demo-Role" = "operator"
+  "X-Demo-Principal" = "local-demo"
+}
+
+$viewerHeaders = @{
+  "X-Demo-Role" = "viewer"
+  "X-Demo-Principal" = "local-viewer"
+}
+
+$create = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/jobs -Headers $operatorHeaders -ContentType 'application/json' -Body '{"input":{"prompt":"demo"}}'
+$started = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/jobs/$($create.id)/start" -Headers $operatorHeaders
+$job = Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8000/api/v1/jobs/$($create.id)" -Headers $viewerHeaders
 ```
 
 Expected outcome:

@@ -39,6 +39,11 @@ def test_orchestration_service_persists_completed_flow_for_pending_job(migrated_
             "model": "test-model",
             "content": "provider-backed content",
         }
+        assert [event.event_type for event in reloaded_job.events] == [
+            "job_start_requested",
+            "job_started",
+            "job_completed",
+        ]
 
 
 def test_orchestration_service_persists_failed_flow_for_provider_error(migrated_engine) -> None:
@@ -68,6 +73,11 @@ def test_orchestration_service_persists_failed_flow_for_provider_error(migrated_
             "type": "RuntimeError",
             "message": "provider unavailable",
         }
+        assert [event.event_type for event in reloaded_job.events] == [
+            "job_start_requested",
+            "job_started",
+            "job_failed",
+        ]
 
 
 class _FakeProvider:

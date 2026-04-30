@@ -1,7 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 
-from app.api.routes.health import router as health_router
-from app.api.routes.jobs import router as jobs_router
+from app.api.errors import (
+    http_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
+from app.api.routes import api_v1_router
 from app.core.config import get_settings
 
 
@@ -14,8 +19,10 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
         redoc_url=None,
     )
-    app.include_router(health_router)
-    app.include_router(jobs_router)
+    app.include_router(api_v1_router)
+    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
     return app
 
 

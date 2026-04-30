@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.persistence.db import Base
 
 if TYPE_CHECKING:
+    from app.persistence.models.job_event import JobEvent
     from app.persistence.models.job_step import JobStep
 
 
@@ -39,4 +40,10 @@ class Job(Base):
         back_populates="job",
         cascade="all, delete-orphan",
         order_by="JobStep.step_index",
+    )
+    events: Mapped[list[JobEvent]] = relationship(
+        "JobEvent",
+        back_populates="job",
+        cascade="all, delete-orphan",
+        order_by="JobEvent.created_at",
     )

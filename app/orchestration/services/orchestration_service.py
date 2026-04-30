@@ -4,6 +4,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.core.job_events import JobEventType
+from app.core.job_lifecycle import JobStatus, ensure_job_transition
 from app.orchestration.pipeline.executor import OrchestrationExecutor
 from app.persistence.repositories.job_repository import JobRepository
 from app.providers.llm.openai_provider import LLMProvider, OpenAIProvider
@@ -55,11 +57,18 @@ class OrchestrationService:
         if job is None:
             raise LookupError(f"Job not found: {job_id}")
 
-        if job.status != "pending":
-            raise ValueError(f"Job cannot be started from status: {job.status}")
+        self.repository.create_job_event(
+            job_id,
+            event_type=JobEventType.JOB_START_REQUESTED.value,
+        )
+        ensure_job_transition(job.status, JobStatus.RUNNING)
 
         lease = self.start_guard.acquire(job_id)
         if lease is None:
+            self.repository.create_job_event(
+                job_id,
+                event_type=JobEventType.JOB_START_REJECTED_DUPLICATE.value,
+            )
             raise DuplicateJobStartError(f"Job start already in progress: {job_id}")
 
         try:
