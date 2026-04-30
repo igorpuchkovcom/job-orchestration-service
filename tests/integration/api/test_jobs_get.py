@@ -5,7 +5,11 @@ from app.persistence.db import create_session_factory
 from app.persistence.repositories.job_repository import JobRepository, JobStepCreate
 
 
-def test_get_job_returns_bounded_schema_shaped_response(migrated_engine, database_url) -> None:
+def test_get_job_returns_bounded_schema_shaped_response(
+    migrated_engine,
+    database_url,
+    viewer_headers,
+) -> None:
     session_factory = create_session_factory(migrated_engine)
 
     with session_factory() as session:
@@ -18,7 +22,7 @@ def test_get_job_returns_bounded_schema_shaped_response(migrated_engine, databas
         session.commit()
 
     client = TestClient(create_app())
-    response = client.get(f"/jobs/{job_id}")
+    response = client.get(f"/api/v1/jobs/{job_id}", headers=viewer_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -29,7 +33,11 @@ def test_get_job_returns_bounded_schema_shaped_response(migrated_engine, databas
     assert body["result_summary"] is None
 
 
-def test_get_job_returns_result_summary_for_completed_job(migrated_engine, database_url) -> None:
+def test_get_job_returns_result_summary_for_completed_job(
+    migrated_engine,
+    database_url,
+    viewer_headers,
+) -> None:
     session_factory = create_session_factory(migrated_engine)
 
     with session_factory() as session:
@@ -53,7 +61,7 @@ def test_get_job_returns_result_summary_for_completed_job(migrated_engine, datab
         session.commit()
 
     client = TestClient(create_app())
-    response = client.get(f"/jobs/{job_id}")
+    response = client.get(f"/api/v1/jobs/{job_id}", headers=viewer_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -73,6 +81,7 @@ def test_get_job_returns_result_summary_for_completed_job(migrated_engine, datab
 def test_get_job_returns_null_result_summary_for_completed_job_with_missing_fields(
     migrated_engine,
     database_url,
+    viewer_headers,
 ) -> None:
     session_factory = create_session_factory(migrated_engine)
 
@@ -96,7 +105,7 @@ def test_get_job_returns_null_result_summary_for_completed_job_with_missing_fiel
         session.commit()
 
     client = TestClient(create_app())
-    response = client.get(f"/jobs/{job_id}")
+    response = client.get(f"/api/v1/jobs/{job_id}", headers=viewer_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -104,9 +113,16 @@ def test_get_job_returns_null_result_summary_for_completed_job_with_missing_fiel
     assert body["result_summary"] is None
 
 
-def test_get_job_returns_404_for_unknown_id(migrated_engine, database_url) -> None:
+def test_get_job_returns_404_for_unknown_id(migrated_engine, database_url, viewer_headers) -> None:
     client = TestClient(create_app())
-    response = client.get("/jobs/00000000-0000-0000-0000-000000000000")
+    response = client.get(
+        "/api/v1/jobs/00000000-0000-0000-0000-000000000000",
+        headers=viewer_headers,
+    )
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Job not found."}
+    assert response.json() == {
+        "code": "job_not_found",
+        "message": "Job not found.",
+        "details": None,
+    }

@@ -14,6 +14,7 @@ def test_start_job_returns_orchestration_owned_completed_flow(
     migrated_engine,
     database_url,
     monkeypatch,
+    operator_headers,
 ) -> None:
     session_factory = create_session_factory(migrated_engine)
 
@@ -29,7 +30,7 @@ def test_start_job_returns_orchestration_owned_completed_flow(
         session.commit()
 
     client = TestClient(create_app())
-    response = client.post(f"/jobs/{job_id}/start")
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -54,6 +55,7 @@ def test_start_job_returns_failed_state_for_provider_error(
     migrated_engine,
     database_url,
     monkeypatch,
+    operator_headers,
 ) -> None:
     session_factory = create_session_factory(migrated_engine)
 
@@ -69,7 +71,7 @@ def test_start_job_returns_failed_state_for_provider_error(
         session.commit()
 
     client = TestClient(create_app())
-    response = client.post(f"/jobs/{job_id}/start")
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -90,6 +92,7 @@ def test_start_job_returns_409_for_duplicate_in_flight_start(
     migrated_engine,
     database_url,
     monkeypatch,
+    operator_headers,
 ) -> None:
     session_factory = create_session_factory(migrated_engine)
     provider = _BlockingProvider()
@@ -122,7 +125,10 @@ def test_start_job_returns_409_for_duplicate_in_flight_start(
     def run_first_start() -> None:
         try:
             with TestClient(app) as client:
-                responses["first"] = client.post(f"/jobs/{job_id}/start")
+                responses["first"] = client.post(
+                    f"/api/v1/jobs/{job_id}/start",
+                    headers=operator_headers,
+                )
         except BaseException as error:  # pragma: no cover - assertion path only
             thread_errors.append(error)
 
@@ -132,10 +138,14 @@ def test_start_job_returns_409_for_duplicate_in_flight_start(
     assert provider.started.wait(timeout=5)
 
     with TestClient(app) as client:
-        duplicate_response = client.post(f"/jobs/{job_id}/start")
+        duplicate_response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
 
     assert duplicate_response.status_code == 409
-    assert duplicate_response.json() == {"detail": "Job start is already in progress."}
+    assert duplicate_response.json() == {
+        "code": "duplicate_job_start",
+        "message": "Job start is already in progress.",
+        "details": None,
+    }
 
     provider.allow_finish.set()
     first_thread.join(timeout=5)
@@ -151,6 +161,7 @@ def test_repeated_start_after_completion_returns_existing_status_conflict(
     migrated_engine,
     database_url,
     monkeypatch,
+    operator_headers,
 ) -> None:
     session_factory = create_session_factory(migrated_engine)
 
@@ -167,15 +178,23 @@ def test_repeated_start_after_completion_returns_existing_status_conflict(
 
     client = TestClient(create_app())
 
-    first_response = client.post(f"/jobs/{job_id}/start")
-    second_response = client.post(f"/jobs/{job_id}/start")
+    first_response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
+    second_response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
 
     assert first_response.status_code == 200
     assert second_response.status_code == 409
-    assert second_response.json() == {"detail": "Job cannot be started from its current status."}
+    assert second_response.json() == {
+        "code": "invalid_job_transition",
+        "message": "Invalid job status transition: completed -> running",
+        "details": None,
+    }
 
 
-def test_start_job_returns_409_for_invalid_transition(migrated_engine, database_url) -> None:
+def test_start_job_returns_409_for_invalid_transition(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
     session_factory = create_session_factory(migrated_engine)
 
     with session_factory() as session:
@@ -184,19 +203,34 @@ def test_start_job_returns_409_for_invalid_transition(migrated_engine, database_
         session.commit()
 
     client = TestClient(create_app())
-    response = client.post(f"/jobs/{job_id}/start")
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
 
     assert response.status_code == 409
-    assert response.json() == {"detail": "Job cannot be started from its current status."}
+    assert response.json() == {
+        "code": "invalid_job_transition",
+        "message": "Invalid job status transition: running -> running",
+        "details": None,
+    }
 
 
-def test_start_job_returns_404_for_unknown_id(migrated_engine, database_url) -> None:
+def test_start_job_returns_404_for_unknown_id(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
     assert migrated_engine is not None
     client = TestClient(create_app())
-    response = client.post("/jobs/00000000-0000-0000-0000-000000000000/start")
+    response = client.post(
+        "/api/v1/jobs/00000000-0000-0000-0000-000000000000/start",
+        headers=operator_headers,
+    )
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Job not found."}
+    assert response.json() == {
+        "code": "job_not_found",
+        "message": "Job not found.",
+        "details": None,
+    }
 
 
 def _fake_service_init_success(self, session) -> None:
@@ -252,7 +286,7 @@ class _InMemoryRedisClient:
         ex: int | None = None,
         nx: bool = False,
     ) -> bool | None:
-        assert value == "1"
+        assert value
         assert ex == 30
         assert nx is True
 

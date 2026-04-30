@@ -1,9 +1,17 @@
+import uuid
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
 from redis import Redis
 from redis.exceptions import RedisError
+
+RELEASE_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+end
+return 0
+"""
 
 
 class SupportsRedisStartGuard(Protocol):
@@ -22,11 +30,21 @@ class SupportsRedisStartGuard(Protocol):
 @dataclass(frozen=True)
 class StartGuardLease:
     key: str
+    token: str | None = None
     client: SupportsRedisStartGuard | None = None
 
     def release(self) -> None:
         if self.client is None:
             return
+
+        if self.token is not None:
+            eval_fn = getattr(self.client, "eval", None)
+            if callable(eval_fn):
+                try:
+                    eval_fn(RELEASE_LOCK_SCRIPT, 1, self.key, self.token)
+                    return
+                except RedisError:
+                    return
 
         try:
             self.client.delete(self.key)
@@ -54,15 +72,16 @@ class RedisStartGuard:
             # Missing Redis config should not block the synchronous request path.
             return StartGuardLease(key=key)
 
+        token = uuid.uuid4().hex
         try:
-            acquired = self.client.set(key, "1", ex=self.ttl_seconds, nx=True)
+            acquired = self.client.set(key, token, ex=self.ttl_seconds, nx=True)
         except RedisError:
             return StartGuardLease(key=key)
 
         if not acquired:
             return None
 
-        return StartGuardLease(key=key, client=self.client)
+        return StartGuardLease(key=key, token=token, client=self.client)
 
     @staticmethod
     def build_key(job_id: UUID) -> str:

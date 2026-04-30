@@ -11,6 +11,8 @@ def test_demo_flow_proves_create_start_get_happy_path(
     migrated_engine,
     database_url,
     monkeypatch,
+    operator_headers,
+    viewer_headers,
 ) -> None:
     assert migrated_engine is not None
     assert database_url
@@ -23,7 +25,11 @@ def test_demo_flow_proves_create_start_get_happy_path(
 
     client = TestClient(create_app())
 
-    create_response = client.post("/jobs", json={"input": {"prompt": "demo"}})
+    create_response = client.post(
+        "/api/v1/jobs",
+        json={"input": {"prompt": "demo"}},
+        headers=operator_headers,
+    )
     assert create_response.status_code == 201
     created = create_response.json()
     job_id = created["id"]
@@ -41,7 +47,10 @@ def test_demo_flow_proves_create_start_get_happy_path(
         "content": "provider-backed content",
     }
 
-    start_response = client.post(f"/jobs/{job_id}/start")
+    start_response = client.post(
+        f"/api/v1/jobs/{job_id}/start",
+        headers=operator_headers,
+    )
     assert start_response.status_code == 200
     started = start_response.json()
 
@@ -56,7 +65,7 @@ def test_demo_flow_proves_create_start_get_happy_path(
     assert started["steps"][0]["status"] == "completed"
     assert started["steps"][0]["output_payload"] == expected_result
 
-    get_response = client.get(f"/jobs/{job_id}")
+    get_response = client.get(f"/api/v1/jobs/{job_id}", headers=viewer_headers)
     assert get_response.status_code == 200
     retrieved = get_response.json()
 

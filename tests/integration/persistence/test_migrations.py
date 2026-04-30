@@ -10,4 +10,9 @@ def test_initial_migration_creates_only_expected_tables(
     command.upgrade(alembic_config, "head")
 
     inspector = inspect(clean_database_engine)
-    assert set(inspector.get_table_names()) == {"alembic_version", "job_steps", "jobs"}
+    assert set(inspector.get_table_names()) == {
+        "alembic_version",
+        "job_events",
+        "job_steps",
+        "jobs",
+    }

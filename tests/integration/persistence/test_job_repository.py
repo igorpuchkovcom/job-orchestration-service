@@ -68,3 +68,30 @@ def test_job_repository_updates_job_and_step_state(migrated_engine) -> None:
         assert loaded_job.steps[0].status == "completed"
         assert loaded_job.steps[0].output_payload == {"result": "ok"}
         assert loaded_job.steps[0].error_payload is None
+
+
+def test_job_repository_appends_events_without_mutation(migrated_engine) -> None:
+    session_factory = create_session_factory(migrated_engine)
+
+    with session_factory() as session:
+        repository = JobRepository(session)
+        job = repository.create_job(
+            status="pending",
+            input_payload={"request": "demo"},
+        )
+        job_id = job.id
+
+        repository.create_job_event(job_id, event_type="job_created")
+        repository.create_job_event(
+            job_id,
+            event_type="job_started",
+            event_payload={"source": "integration-test"},
+        )
+        session.commit()
+
+    with session_factory() as session:
+        loaded_job = JobRepository(session).get_job(job_id)
+        assert loaded_job is not None
+        assert [event.event_type for event in loaded_job.events] == ["job_created", "job_started"]
+        assert loaded_job.events[0].event_payload is None
+        assert loaded_job.events[1].event_payload == {"source": "integration-test"}

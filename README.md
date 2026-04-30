@@ -6,24 +6,73 @@ This repository is a deliberately scoped Python reimplementation of the core ide
 
 ## Core Capabilities
 
-- job lifecycle endpoints: `POST /jobs`, `POST /jobs/{job_id}/start`, `GET /jobs/{job_id}`, and `GET /health`
+- versioned job lifecycle endpoints: `POST /api/v1/jobs`, `POST /api/v1/jobs/{job_id}/start`, `GET /api/v1/jobs/{job_id}`, and `GET /api/v1/health`
 - persisted job and step lifecycle state via SQLAlchemy and Alembic
 - provider-backed execution through a clear LLM provider boundary
 - bounded Redis-backed duplicate-start coordination
+- centralized workflow status transitions with explicit validation
+- immutable append-only job lifecycle event logging
+- standardized API error envelope with global exception normalization
+- lightweight demo auth/RBAC boundary suitable for swapping with JWT validation
 - read-time `result_summary` alongside raw execution `steps`
 - local development, CI, CD, and a small Terraform baseline for one Cloud Run environment
 
 ## Architecture Overview
 
 - `app/api/`: HTTP routes and response schemas
+- `app/api/auth.py`: demo-only auth and RBAC dependency boundary
+- `app/api/errors.py`: API error envelope helpers and exception normalization
 - `app/orchestration/`: job lifecycle ownership and execution pipeline
 - `app/persistence/`: SQLAlchemy models, session wiring, and repositories
 - `app/providers/`: provider contract and implementations
 - `app/state/`: Redis-backed coordination helpers
 - `app/manifests/`: bounded result shaping
-- `app/core/`: settings and application wiring
+- `app/core/`: settings, lifecycle enums/transitions, and domain event types
 
 API handlers stay thin. Orchestration owns state transitions and execution. Persistence, provider access, and Redis coordination are kept behind explicit boundaries.
+
+## API Versioning And Contracts
+
+- all service routes are mounted under `/api/v1`
+- API errors are normalized into one envelope:
+  - `code`
+  - `message`
+  - `details` (optional)
+- route handlers still use `HTTPException`, but global exception handlers ensure stable response shape
+
+## Demo Auth And RBAC
+
+This showcase uses a lightweight demo auth boundary that is intentionally simple but explicit:
+
+- `X-Demo-Role` is required
+- supported roles: `viewer`, `operator`, `admin`
+- `X-Demo-Principal` is optional and defaults to `demo-user`
+
+RBAC policy in the current bounded API:
+
+- `GET /api/v1/jobs/{job_id}`: `viewer`, `operator`, `admin`
+- `POST /api/v1/jobs`: `operator`, `admin`
+- `POST /api/v1/jobs/{job_id}/start`: `operator`, `admin`
+
+This is not a production identity integration. The dependency boundary is intentionally shaped so it can be replaced by JWT/OIDC/Azure AD token validation later.
+
+## Workflow And Auditability
+
+Workflow status is intentionally bounded and explicit:
+
+- `pending -> running -> completed`
+- `pending -> running -> failed`
+
+Invalid transitions are rejected with a conflict response and structured error.
+
+Lifecycle events are append-only in `job_events` and currently include:
+
+- `job_created`
+- `job_start_requested`
+- `job_started`
+- `job_completed`
+- `job_failed`
+- `job_start_rejected_duplicate`
 
 ## Main Flow
 
@@ -77,7 +126,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 Useful local endpoints:
 
-- `GET /health`
+- `GET /api/v1/health`
 - `GET /docs`
 - `GET /openapi.json`
 
@@ -91,6 +140,11 @@ Common local configuration lives in `.env`:
 - `ENVIRONMENT`: optional, defaults to `development`
 
 The checked-in `.env.example` is wired for the default local Docker Compose services on `127.0.0.1`.
+
+For local job API calls, include demo auth headers, for example:
+
+- `X-Demo-Role: operator`
+- `X-Demo-Principal: local-demo`
 
 The repo also includes a small runtime image in `Dockerfile`. For a disposable container runbook, see [`docs/demo-flow.md`](docs/demo-flow.md).
 
@@ -128,7 +182,7 @@ The main remote quality gate is `CI / ci`, which runs on pull requests and pushe
 - `main` is the only deploy branch.
 - Pull requests are the normal path into `main`.
 - Successful `CI` on `main` triggers `CD`.
-- `CD` builds and pushes the runtime image, runs `python -m alembic upgrade head`, deploys to Cloud Run, and verifies authenticated `/health`.
+- `CD` builds and pushes the runtime image, runs `python -m alembic upgrade head`, deploys to Cloud Run, and verifies authenticated `/api/v1/health`.
 - `workflow_dispatch` is reserved for manual redeploy or break-glass use from `main`.
 - Runtime configuration for the current MVP still comes from GitHub Actions variables and secrets.
 
@@ -157,8 +211,19 @@ The IaC path is intentionally one-environment and import-first. See [`infra/READ
 - The orchestration flow is intentionally bounded to one fixed provider-backed step instead of the broader planner/executor/evaluator breadth of the original system.
 - The repo includes one concrete provider implementation rather than a provider matrix.
 - Redis is used only for duplicate-start coordination, not as a generalized workflow state system.
+- Auth is intentionally demo-only header-based RBAC, not a full identity provider integration.
 - Terraform intentionally excludes database provisioning, Redis provisioning, multi-environment rollout, and broader platform resources.
 - This repo is a bounded reimplementation of the service shape and operational model, not a claim of exact production parity.
+
+## Interview Positioning
+
+For backend/systems interviews, this repo is strongest when presented as a focused API service that demonstrates:
+
+- versioned API ownership and predictable error contracts
+- explicit state transition control in orchestration flows
+- immutable lifecycle audit events
+- bounded but realistic Redis coordination for duplicate work prevention
+- clean layering with seams for replacing demo auth with real token validation
 
 ## Supporting Docs
 

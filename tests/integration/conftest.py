@@ -99,3 +99,27 @@ def clean_database_engine(database_engine: Engine) -> Engine:
 def migrated_engine(clean_database_engine: Engine, alembic_config: Config) -> Engine:
     command.upgrade(alembic_config, "head")
     return clean_database_engine
+
+
+@pytest.fixture
+def viewer_headers() -> dict[str, str]:
+    return {
+        "X-Demo-Principal": "viewer-user",
+        "X-Demo-Role": "viewer",
+    }
+
+
+@pytest.fixture
+def operator_headers() -> dict[str, str]:
+    return {
+        "X-Demo-Principal": "operator-user",
+        "X-Demo-Role": "operator",
+    }
+
+
+@pytest.fixture
+def admin_headers() -> dict[str, str]:
+    return {
+        "X-Demo-Principal": "admin-user",
+        "X-Demo-Role": "admin",
+    }

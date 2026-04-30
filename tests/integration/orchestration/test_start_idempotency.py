@@ -26,7 +26,7 @@ class InMemoryRedisClient:
         ex: int | None = None,
         nx: bool = False,
     ) -> bool | None:
-        assert value == "1"
+        assert value
         assert ex == 30
         assert nx is True
 

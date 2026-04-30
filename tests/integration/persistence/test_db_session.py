@@ -1,7 +1,7 @@
 from sqlalchemy import inspect, select
 
 from app.persistence.db import Base, create_session_factory
-from app.persistence.models import Job, JobStep
+from app.persistence.models import Job, JobEvent, JobStep
 
 
 def test_db_session_can_execute_simple_query(database_engine) -> None:
@@ -14,8 +14,9 @@ def test_db_session_can_execute_simple_query(database_engine) -> None:
 def test_metadata_contains_only_planned_models() -> None:
     # Importing the models registers them with the declarative metadata.
     assert Job.__tablename__ == "jobs"
+    assert JobEvent.__tablename__ == "job_events"
     assert JobStep.__tablename__ == "job_steps"
-    assert set(Base.metadata.tables) == {"jobs", "job_steps"}
+    assert set(Base.metadata.tables) == {"jobs", "job_events", "job_steps"}
 
 
 def test_model_mappings_are_valid() -> None:

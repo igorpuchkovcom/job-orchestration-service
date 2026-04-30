@@ -10,6 +10,7 @@ class RecordingRedisClient:
         self.acquire_result = acquire_result
         self.set_calls: list[tuple[str, str, int | None, bool]] = []
         self.delete_calls: list[str] = []
+        self.eval_calls: list[tuple[str, int, str, str]] = []
 
     def set(
         self,
@@ -25,6 +26,10 @@ class RecordingRedisClient:
     def delete(self, *names: str) -> int:
         self.delete_calls.extend(names)
         return len(names)
+
+    def eval(self, script: str, numkeys: int, key: str, token: str) -> int:
+        self.eval_calls.append((script, numkeys, key, token))
+        return 1
 
 
 class FailingSetRedisClient:
@@ -42,8 +47,8 @@ class FailingSetRedisClient:
         return len(names)
 
 
-class FailingDeleteRedisClient(RecordingRedisClient):
-    def delete(self, *names: str) -> int:
+class FailingEvalRedisClient(RecordingRedisClient):
+    def eval(self, script: str, numkeys: int, key: str, token: str) -> int:
         raise ConnectionError("redis unavailable")
 
 
@@ -56,11 +61,21 @@ def test_start_guard_acquires_key_with_bounded_ttl_and_releases_it() -> None:
 
     assert lease is not None
     assert lease.key == f"job-service:job:{job_id}:start-guard"
-    assert client.set_calls == [(lease.key, "1", 30, True)]
+    assert len(client.set_calls) == 1
+    key, token, ex, nx = client.set_calls[0]
+    assert key == lease.key
+    assert token == lease.token
+    assert ex == 30
+    assert nx is True
 
     lease.release()
 
-    assert client.delete_calls == [lease.key]
+    assert client.delete_calls == []
+    assert len(client.eval_calls) == 1
+    _, numkeys, key, token = client.eval_calls[0]
+    assert numkeys == 1
+    assert key == lease.key
+    assert token == lease.token
 
 
 def test_start_guard_returns_none_when_duplicate_start_is_in_flight() -> None:
@@ -89,7 +104,7 @@ def test_start_guard_release_is_best_effort_when_redis_errors() -> None:
     guard = RedisStartGuard(
         redis_url=None,
         ttl_seconds=30,
-        client=FailingDeleteRedisClient(),
+        client=FailingEvalRedisClient(),
     )
 
     lease = guard.acquire(uuid4())

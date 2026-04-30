@@ -30,6 +30,7 @@ class FakeJobRepository:
     def __init__(self, job: FakeJob | None) -> None:
         self.job = job
         self.steps: list[FakeJobStep] = []
+        self.events: list[tuple[str, dict | None]] = []
 
     def get_job(self, job_id: UUID) -> FakeJob | None:
         if self.job is None or self.job.id != job_id:
@@ -95,6 +96,17 @@ class FakeJobRepository:
                 return step
         raise LookupError(f"JobStep not found: {step_id}")
 
+    def create_job_event(
+        self,
+        job_id: UUID,
+        *,
+        event_type: str,
+        event_payload: dict | None = None,
+    ) -> None:
+        if self.job is None or self.job.id != job_id:
+            raise LookupError(f"Job not found: {job_id}")
+        self.events.append((event_type, event_payload))
+
 
 class FakeProvider:
     def __init__(
@@ -142,6 +154,7 @@ def test_executor_runs_provider_backed_flow_and_updates_in_memory_state() -> Non
         "content": "provider-backed content",
     }
     assert repository.steps[0].error_payload is None
+    assert repository.events == [("job_started", None), ("job_completed", None)]
 
 
 def test_executor_marks_job_and_step_failed_for_provider_error() -> None:
@@ -162,6 +175,10 @@ def test_executor_marks_job_and_step_failed_for_provider_error() -> None:
         "type": "RuntimeError",
         "message": "provider unavailable",
     }
+    assert repository.events == [
+        ("job_started", None),
+        ("job_failed", {"type": "RuntimeError", "message": "provider unavailable"}),
+    ]
 
 
 def test_executor_rejects_non_pending_jobs() -> None:
@@ -178,7 +195,7 @@ def test_executor_rejects_non_pending_jobs() -> None:
     try:
         OrchestrationExecutor(repository, lambda: provider).start_job(job.id)
     except ValueError as error:
-        assert str(error) == f"Job cannot be started from status: {job.status}"
+        assert str(error) == f"Invalid job status transition: {job.status} -> running"
     else:
         raise AssertionError("Expected ValueError for non-pending job")
 

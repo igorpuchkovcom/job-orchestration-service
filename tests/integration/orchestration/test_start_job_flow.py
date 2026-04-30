@@ -12,6 +12,7 @@ def test_start_route_delegates_to_orchestration_and_completes_flow(
     migrated_engine,
     database_url,
     monkeypatch,
+    operator_headers,
 ) -> None:
     session_factory = create_session_factory(migrated_engine)
 
@@ -27,7 +28,7 @@ def test_start_route_delegates_to_orchestration_and_completes_flow(
         session.commit()
 
     client = TestClient(create_app())
-    response = client.post(f"/jobs/{job_id}/start")
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
 
     assert response.status_code == 200
     body = response.json()
