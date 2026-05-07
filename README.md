@@ -137,6 +137,8 @@ Common local configuration lives in `.env`:
 - `REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
 - `OPENAI_API_KEY`: only required for the live provider path
 - `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
+- `OPENAI_TIMEOUT_SECONDS`: optional, defaults to `30`
+- `OPENAI_MAX_RETRIES`: optional, defaults to `2`
 - `ENVIRONMENT`: optional, defaults to `development`
 
 The checked-in `.env.example` is wired for the default local Docker Compose services on `127.0.0.1`.
@@ -205,6 +207,45 @@ CD continues to own release-time actions:
 - post-deploy health verification
 
 The IaC path is intentionally one-environment and import-first. See [`infra/README.md`](infra/README.md) for required variables, import guidance, and the Terraform/CD ownership split.
+
+## Production readiness notes
+
+This service is a production-shaped architecture showcase, not a full production platform.
+
+Implemented strengths:
+
+- lifecycle-oriented FastAPI API
+- PostgreSQL durable state
+- Redis duplicate-start guard
+- provider boundary
+- Alembic migrations
+- unit/integration tests
+- CI/CD and Cloud Run deployment path
+- Docker and Terraform baseline
+
+Known gaps:
+
+- synchronous execution path
+- no queue/worker yet
+- demo auth only
+- limited observability beyond request correlation and lifecycle events
+- no full idempotency keys
+- no Secret Manager integration
+- provider retry/error taxonomy is still minimal
+- no complete production-grade IaC data plane
+
+Next production steps:
+
+1. Move execution to queue/worker model
+2. Add idempotency keys
+3. Add OIDC/JWT auth
+4. Add full structured logs, metrics and tracing
+5. Improve provider timeout/retry/error taxonomy
+6. Move secrets to Secret Manager
+7. Add Cloud SQL/Memorystore/monitoring to Terraform
+8. Add staging/canary/rollback strategy
+
+Interview note: present this repository as an architecture showcase that demonstrates decisions and trade-offs, not as a claim of full production readiness.
 
 ## Scope And Limitations
 

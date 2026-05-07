@@ -16,14 +16,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _database_url() -> str:
-    database_url = os.getenv("DATABASE_URL")
+    database_url = os.getenv("DATABASE_URL") or get_settings().database_url
     if not database_url:
         raise RuntimeError("DATABASE_URL must be set for integration tests.")
     return database_url
 
 
 def _redis_url() -> str:
-    redis_url = os.getenv("REDIS_URL")
+    redis_url = os.getenv("REDIS_URL") or get_settings().redis_url
     if not redis_url:
         raise RuntimeError("REDIS_URL must be set for Redis-backed integration tests.")
     return redis_url
