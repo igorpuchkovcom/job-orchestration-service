@@ -6,6 +6,7 @@ from app.api.errors import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from app.api.middleware import add_request_id_middleware
 from app.api.routes import api_v1_router
 from app.core.config import get_settings
 
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
         redoc_url=None,
     )
+    add_request_id_middleware(app)
     app.include_router(api_v1_router)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)

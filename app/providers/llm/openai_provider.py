@@ -1,7 +1,25 @@
+import time
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from openai import OpenAI
+
+TRANSIENT_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+TRANSIENT_ERROR_NAMES = {
+    "APIConnectionError",
+    "APITimeoutError",
+    "InternalServerError",
+    "RateLimitError",
+    "ServiceUnavailableError",
+}
+NON_TRANSIENT_ERROR_NAMES = {
+    "AuthenticationError",
+    "BadRequestError",
+    "ConflictError",
+    "NotFoundError",
+    "PermissionDeniedError",
+    "UnprocessableEntityError",
+}
 
 
 @dataclass(frozen=True)
@@ -23,24 +41,41 @@ class OpenAIProvider:
         *,
         api_key: str | None,
         model: str,
+        timeout_seconds: float = 30.0,
+        max_retries: int = 2,
         client: OpenAI | None = None,
+        sleep_fn: Callable[[float], None] | None = None,
     ) -> None:
         if not api_key:
             raise ValueError("OpenAI API key must be configured for provider-backed execution.")
         if not model:
             raise ValueError("OpenAI model must be configured for provider-backed execution.")
+        if timeout_seconds <= 0:
+            raise ValueError("OpenAI timeout_seconds must be greater than zero.")
+        if max_retries < 0:
+            raise ValueError("OpenAI max_retries must be zero or greater.")
 
         self.model = model
-        self.client = client or OpenAI(api_key=api_key)
+        self.timeout_seconds = timeout_seconds
+        self.max_retries = max_retries
+        self.client = client or OpenAI(api_key=api_key, timeout=timeout_seconds)
+        self._sleep = sleep_fn or time.sleep
 
     def generate_text(self, prompt: str) -> LLMGenerationResult:
         if not prompt.strip():
             raise ValueError("Provider prompt must not be empty.")
 
-        try:
-            response = self.client.responses.create(model=self.model, input=prompt)
-        except Exception as error:
-            raise RuntimeError(f"OpenAI request failed: {error}") from error
+        retries = 0
+        while True:
+            try:
+                response = self.client.responses.create(model=self.model, input=prompt)
+                break
+            except Exception as error:
+                if retries >= self.max_retries or not self._is_transient_error(error):
+                    raise RuntimeError(f"OpenAI request failed: {error}") from error
+
+                retries += 1
+                self._sleep(self._retry_backoff_seconds(retries))
 
         content = self._extract_content(response)
         if not content:
@@ -87,3 +122,22 @@ class OpenAIProvider:
                 usage_payload[field_name] = value
 
         return usage_payload or None
+
+    @staticmethod
+    def _retry_backoff_seconds(retry_number: int) -> float:
+        # Keep retry waits bounded and short for this synchronous flow.
+        return min(0.25 * (2 ** (retry_number - 1)), 2.0)
+
+    @staticmethod
+    def _is_transient_error(error: Exception) -> bool:
+        error_name = type(error).__name__
+        if error_name in NON_TRANSIENT_ERROR_NAMES:
+            return False
+        if error_name in TRANSIENT_ERROR_NAMES:
+            return True
+
+        status_code = getattr(error, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code in TRANSIENT_STATUS_CODES
+
+        return isinstance(error, (ConnectionError, OSError, TimeoutError))

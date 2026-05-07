@@ -18,6 +18,8 @@ def create_default_provider(settings: Settings) -> LLMProvider:
     return OpenAIProvider(
         api_key=settings.openai_api_key,
         model=settings.openai_model,
+        timeout_seconds=settings.openai_timeout_seconds,
+        max_retries=settings.openai_max_retries,
     )
 
 
