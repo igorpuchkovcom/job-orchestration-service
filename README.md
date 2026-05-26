@@ -256,16 +256,6 @@ Interview note: present this repository as an architecture showcase that demonst
 - Terraform intentionally excludes database provisioning, Redis provisioning, multi-environment rollout, and broader platform resources.
 - This repo is a bounded reimplementation of the service shape and operational model, not a claim of exact production parity.
 
-## Interview Positioning
-
-For backend/systems interviews, this repo is strongest when presented as a focused API service that demonstrates:
-
-- versioned API ownership and predictable error contracts
-- explicit state transition control in orchestration flows
-- immutable lifecycle audit events
-- bounded but realistic Redis coordination for duplicate work prevention
-- clean layering with seams for replacing demo auth with real token validation
-
 ## Supporting Docs
 
 - [`docs/demo-flow.md`](docs/demo-flow.md): create/start/get runbook and disposable Docker path
