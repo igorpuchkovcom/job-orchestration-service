@@ -8,6 +8,8 @@ def test_settings_defaults(monkeypatch) -> None:
         "ENVIRONMENT",
         "OPENAI_API_KEY",
         "OPENAI_MODEL",
+        "LLM_RUNTIME",
+        "OPENAI_BASE_URL",
         "OPENAI_TIMEOUT_SECONDS",
         "OPENAI_MAX_RETRIES",
         "REDIS_URL",
@@ -21,6 +23,8 @@ def test_settings_defaults(monkeypatch) -> None:
     assert settings.environment == "development"
     assert settings.openai_api_key is None
     assert settings.openai_model == "gpt-4o-mini"
+    assert settings.llm_runtime == "openai_api"
+    assert settings.openai_base_url is None
     assert settings.openai_timeout_seconds == 30.0
     assert settings.openai_max_retries == 2
     assert settings.redis_url is None
@@ -32,6 +36,8 @@ def test_settings_reads_environment_variables(monkeypatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "test")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini-test")
+    monkeypatch.setenv("LLM_RUNTIME", "openai_compatible_local")
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:11434/v1")
     monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "20")
     monkeypatch.setenv("OPENAI_MAX_RETRIES", "1")
     monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
@@ -43,6 +49,8 @@ def test_settings_reads_environment_variables(monkeypatch) -> None:
     assert settings.environment == "test"
     assert settings.openai_api_key == "test-key"
     assert settings.openai_model == "gpt-4o-mini-test"
+    assert settings.llm_runtime == "openai_compatible_local"
+    assert settings.openai_base_url == "http://127.0.0.1:11434/v1"
     assert settings.openai_timeout_seconds == 20.0
     assert settings.openai_max_retries == 1
     assert settings.redis_url == "redis://127.0.0.1:6379/0"

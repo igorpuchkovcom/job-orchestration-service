@@ -19,7 +19,7 @@ class FakeJob:
     id: object = field(default_factory=uuid4)
 
 
-def test_build_result_summary_returns_small_projection_for_completed_job() -> None:
+def test_build_result_summary_includes_inference_metrics_when_present() -> None:
     job = FakeJob(
         status="completed",
         steps=[
@@ -30,6 +30,12 @@ def test_build_result_summary_returns_small_projection_for_completed_job() -> No
                     "content": "provider-backed content",
                     "provider": "openai",
                     "model": "gpt-4o-mini",
+                    "latency_ms": 28,
+                    "tokens_in": 30,
+                    "tokens_out": 12,
+                    "total_tokens": 42,
+                    "runtime": "openai_api",
+                    "model_id": "openai:gpt-4o-mini",
                     "usage": {"total_tokens": 42},
                 },
             )
@@ -40,6 +46,12 @@ def test_build_result_summary_returns_small_projection_for_completed_job() -> No
         "content": "provider-backed content",
         "provider": "openai",
         "model": "gpt-4o-mini",
+        "latency_ms": 28,
+        "tokens_in": 30,
+        "tokens_out": 12,
+        "total_tokens": 42,
+        "runtime": "openai_api",
+        "model_id": "openai:gpt-4o-mini",
     }
 
 
@@ -56,6 +68,31 @@ def test_build_result_summary_returns_none_for_failed_job() -> None:
     )
 
     assert build_result_summary(job) is None
+
+
+def test_build_result_summary_stays_valid_without_usage_metrics() -> None:
+    job = FakeJob(
+        status="completed",
+        steps=[
+            FakeJobStep(
+                step_key="llm_generate_text",
+                status="completed",
+                output_payload={
+                    "content": "provider-backed content",
+                    "provider": "openai",
+                    "model": "gpt-4o-mini",
+                    "latency_ms": 11,
+                },
+            )
+        ],
+    )
+
+    assert build_result_summary(job) == {
+        "content": "provider-backed content",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "latency_ms": 11,
+    }
 
 
 def test_build_result_summary_returns_none_for_running_or_pending_jobs() -> None:

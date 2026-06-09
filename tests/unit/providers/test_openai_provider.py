@@ -66,6 +66,33 @@ def test_openai_provider_applies_timeout_when_creating_client(monkeypatch) -> No
     assert captured_kwargs == {"api_key": "test-key", "timeout": 12.5}
 
 
+def test_openai_provider_forwards_base_url_when_configured(monkeypatch) -> None:
+    response = SimpleNamespace(output_text="provider text", usage=None)
+    captured_kwargs: dict[str, object] = {}
+
+    class FakeOpenAIClient:
+        def __init__(self, **kwargs) -> None:
+            captured_kwargs.update(kwargs)
+            self.responses = SimpleNamespace(create=lambda **_: response)
+
+    monkeypatch.setattr(openai_provider_module, "OpenAI", FakeOpenAIClient)
+
+    provider = OpenAIProvider(
+        api_key="test-key",
+        model="gpt-4o-mini",
+        base_url="http://127.0.0.1:11434/v1",
+    )
+
+    result = provider.generate_text("demo prompt")
+
+    assert result.content == "provider text"
+    assert captured_kwargs == {
+        "api_key": "test-key",
+        "timeout": 30.0,
+        "base_url": "http://127.0.0.1:11434/v1",
+    }
+
+
 def test_openai_provider_raises_for_missing_api_key() -> None:
     with pytest.raises(ValueError, match="OpenAI API key must be configured"):
         OpenAIProvider(api_key=None, model="gpt-4o-mini")

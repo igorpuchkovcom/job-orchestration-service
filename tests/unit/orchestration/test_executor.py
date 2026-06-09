@@ -136,10 +136,15 @@ def test_executor_runs_provider_backed_flow_and_updates_in_memory_state() -> Non
             provider="openai",
             model="test-model",
             content="provider-backed content",
+            usage={"input_tokens": 9, "output_tokens": 4, "total_tokens": 13},
         )
     )
 
-    OrchestrationExecutor(repository, lambda: provider).start_job(job.id)
+    OrchestrationExecutor(
+        repository,
+        lambda: provider,
+        inference_metadata={"runtime": "openai_api", "model_id": "openai:gpt-4o-mini"},
+    ).start_job(job.id)
 
     assert provider.prompts == ["demo prompt"]
     assert job.status == "completed"
@@ -148,13 +153,46 @@ def test_executor_runs_provider_backed_flow_and_updates_in_memory_state() -> Non
     assert len(repository.steps) == 1
     assert repository.steps[0].step_key == "llm_generate_text"
     assert repository.steps[0].status == "completed"
-    assert repository.steps[0].output_payload == {
-        "provider": "openai",
-        "model": "test-model",
-        "content": "provider-backed content",
-    }
+    output_payload = repository.steps[0].output_payload
+    assert output_payload is not None
+    assert output_payload["provider"] == "openai"
+    assert output_payload["model"] == "test-model"
+    assert output_payload["content"] == "provider-backed content"
+    assert output_payload["runtime"] == "openai_api"
+    assert output_payload["model_id"] == "openai:gpt-4o-mini"
+    assert output_payload["tokens_in"] == 9
+    assert output_payload["tokens_out"] == 4
+    assert output_payload["total_tokens"] == 13
+    assert output_payload["usage"] == {"input_tokens": 9, "output_tokens": 4, "total_tokens": 13}
+    assert isinstance(output_payload["latency_ms"], int)
+    assert output_payload["latency_ms"] >= 0
     assert repository.steps[0].error_payload is None
     assert repository.events == [("job_started", None), ("job_completed", None)]
+
+
+def test_executor_keeps_result_safe_when_usage_is_missing() -> None:
+    job = FakeJob(id=uuid4(), status="pending", input_payload={"prompt": "demo prompt"})
+    repository = FakeJobRepository(job)
+    provider = FakeProvider(
+        result=LLMGenerationResult(
+            provider="openai",
+            model="test-model",
+            content="provider-backed content",
+        )
+    )
+
+    OrchestrationExecutor(repository, lambda: provider).start_job(job.id)
+
+    output_payload = repository.steps[0].output_payload
+    assert output_payload is not None
+    assert output_payload["provider"] == "openai"
+    assert output_payload["model"] == "test-model"
+    assert output_payload["content"] == "provider-backed content"
+    assert isinstance(output_payload["latency_ms"], int)
+    assert "tokens_in" not in output_payload
+    assert "tokens_out" not in output_payload
+    assert "total_tokens" not in output_payload
+    assert "usage" not in output_payload
 
 
 def test_executor_marks_job_and_step_failed_for_provider_error() -> None:

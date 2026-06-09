@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "job-orchestration-service"
 version = "0.1.0"
-description = "Interview-worthy Python backend inspired by a production orchestration system."
+description = "Python backend inspired by a production orchestration system."
 requires-python = ">=3.11"
 dependencies = [
   "alembic",

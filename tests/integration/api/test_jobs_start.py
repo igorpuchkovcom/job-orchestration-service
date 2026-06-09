@@ -39,16 +39,23 @@ def test_start_job_returns_orchestration_owned_completed_flow(
     assert len(body["steps"]) == 1
     assert body["steps"][0]["step_key"] == "llm_generate_text"
     assert body["steps"][0]["status"] == "completed"
-    assert body["steps"][0]["output_payload"] == {
-        "provider": "openai",
-        "model": "test-model",
-        "content": "provider-backed content",
-    }
-    assert body["result_summary"] == {
-        "provider": "openai",
-        "model": "test-model",
-        "content": "provider-backed content",
-    }
+    output_payload = body["steps"][0]["output_payload"]
+    assert output_payload["provider"] == "openai"
+    assert output_payload["model"] == "test-model"
+    assert output_payload["content"] == "provider-backed content"
+    assert output_payload["tokens_in"] == 5
+    assert output_payload["tokens_out"] == 2
+    assert output_payload["total_tokens"] == 7
+    assert isinstance(output_payload["latency_ms"], int)
+    assert output_payload["latency_ms"] >= 0
+    assert body["result_summary"]["provider"] == "openai"
+    assert body["result_summary"]["model"] == "test-model"
+    assert body["result_summary"]["content"] == "provider-backed content"
+    assert body["result_summary"]["tokens_in"] == 5
+    assert body["result_summary"]["tokens_out"] == 2
+    assert body["result_summary"]["total_tokens"] == 7
+    assert isinstance(body["result_summary"]["latency_ms"], int)
+    assert body["result_summary"]["latency_ms"] >= 0
 
 
 def test_start_job_returns_failed_state_for_provider_error(
@@ -86,6 +93,159 @@ def test_start_job_returns_failed_state_for_provider_error(
         "message": "provider unavailable",
     }
     assert body["result_summary"] is None
+
+
+def test_start_job_returns_422_for_vllm_runtime_placeholder(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
+    session_factory = create_session_factory(migrated_engine)
+
+    with session_factory() as session:
+        job = JobRepository(session).create_job(
+            status="pending",
+            input_payload={
+                "prompt": "demo",
+                "_inference": {
+                    "runtime": "vllm_compatible_stub",
+                },
+            },
+        )
+        job_id = job.id
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "invalid_inference_configuration",
+        "message": "Runtime 'vllm_compatible_stub' is intentionally unsupported in this spike.",
+        "details": None,
+    }
+
+
+def test_start_job_returns_422_for_unknown_model_id(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
+    session_factory = create_session_factory(migrated_engine)
+
+    with session_factory() as session:
+        job = JobRepository(session).create_job(
+            status="pending",
+            input_payload={
+                "prompt": "demo",
+                "_inference": {
+                    "model_id": "unknown:model",
+                },
+            },
+        )
+        job_id = job.id
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "invalid_inference_configuration",
+        "message": "Unknown model_id: unknown:model",
+        "details": None,
+    }
+
+
+def test_start_job_returns_422_for_invalid_runtime_value_in_payload(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
+    session_factory = create_session_factory(migrated_engine)
+
+    with session_factory() as session:
+        job = JobRepository(session).create_job(
+            status="pending",
+            input_payload={
+                "prompt": "demo",
+                "_inference": {
+                    "runtime": "not-a-runtime",
+                },
+            },
+        )
+        job_id = job.id
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "invalid_inference_configuration",
+        "message": "Unsupported runtime value: not-a-runtime",
+        "details": None,
+    }
+
+
+def test_start_job_returns_422_for_local_runtime_without_base_url(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
+    session_factory = create_session_factory(migrated_engine)
+
+    with session_factory() as session:
+        job = JobRepository(session).create_job(
+            status="pending",
+            input_payload={
+                "prompt": "demo",
+                "_inference": {
+                    "runtime": "openai_compatible_local",
+                },
+            },
+        )
+        job_id = job.id
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "invalid_inference_configuration",
+        "message": "openai_compatible_local runtime requires OPENAI_BASE_URL.",
+        "details": None,
+    }
+
+
+def test_start_job_returns_422_for_malformed_inference_metadata(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
+    session_factory = create_session_factory(migrated_engine)
+
+    with session_factory() as session:
+        job = JobRepository(session).create_job(
+            status="pending",
+            input_payload={
+                "prompt": "demo",
+                "_inference": "malformed",
+            },
+        )
+        job_id = job.id
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.post(f"/api/v1/jobs/{job_id}/start", headers=operator_headers)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "invalid_inference_configuration",
+        "message": "Invalid _inference metadata: expected an object.",
+        "details": None,
+    }
 
 
 def test_start_job_returns_409_for_duplicate_in_flight_start(
@@ -242,6 +402,7 @@ def _fake_service_init_success(self, session) -> None:
                 provider="openai",
                 model="test-model",
                 content="provider-backed content",
+                usage={"input_tokens": 5, "output_tokens": 2, "total_tokens": 7},
             )
         ),
         start_guard=RedisStartGuard(redis_url=None, ttl_seconds=30),
