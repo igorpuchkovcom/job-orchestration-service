@@ -31,6 +31,10 @@ def test_get_job_returns_bounded_schema_shaped_response(
     assert body["input_payload"] == {"prompt": "demo"}
     assert body["steps"][0]["step_key"] == "prepare"
     assert body["result_summary"] is None
+    assert body["job_type"] is None
+    assert body["model_id"] is None
+    assert body["runtime"] is None
+    assert body["resource_profile"] is None
 
 
 def test_get_job_returns_result_summary_for_completed_job(
@@ -76,6 +80,41 @@ def test_get_job_returns_result_summary_for_completed_job(
         "model": "test-model",
         "content": "provider-backed content",
     }
+
+
+def test_get_job_exposes_inference_metadata_when_present(
+    migrated_engine,
+    database_url,
+    viewer_headers,
+) -> None:
+    session_factory = create_session_factory(migrated_engine)
+
+    with session_factory() as session:
+        job = JobRepository(session).create_job(
+            status="pending",
+            input_payload={
+                "prompt": "demo",
+                "_inference": {
+                    "job_type": "inference",
+                    "model_id": "openai:gpt-4o-mini",
+                    "runtime": "openai_api",
+                    "resource_profile": "cpu-small",
+                },
+            },
+            steps=[],
+        )
+        job_id = job.id
+        session.commit()
+
+    client = TestClient(create_app())
+    response = client.get(f"/api/v1/jobs/{job_id}", headers=viewer_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job_type"] == "inference"
+    assert body["model_id"] == "openai:gpt-4o-mini"
+    assert body["runtime"] == "openai_api"
+    assert body["resource_profile"] == "cpu-small"
 
 
 def test_get_job_returns_null_result_summary_for_completed_job_with_missing_fields(

@@ -37,11 +37,12 @@ def test_start_route_delegates_to_orchestration_and_completes_flow(
     assert len(body["steps"]) == 1
     assert body["steps"][0]["step_key"] == "llm_generate_text"
     assert body["steps"][0]["status"] == "completed"
-    assert body["steps"][0]["output_payload"] == {
-        "provider": "openai",
-        "model": "test-model",
-        "content": "provider-backed content",
-    }
+    output_payload = body["steps"][0]["output_payload"]
+    assert output_payload["provider"] == "openai"
+    assert output_payload["model"] == "test-model"
+    assert output_payload["content"] == "provider-backed content"
+    assert isinstance(output_payload["latency_ms"], int)
+    assert output_payload["latency_ms"] >= 0
 
 
 def _fake_service_init_success(self, session) -> None:

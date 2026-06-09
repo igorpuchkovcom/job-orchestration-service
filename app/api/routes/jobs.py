@@ -9,6 +9,7 @@ from app.core.job_events import JobEventType
 from app.core.job_lifecycle import JobStatus
 from app.orchestration.services.orchestration_service import (
     DuplicateJobStartError,
+    InferenceConfigurationError,
     OrchestrationService,
 )
 from app.persistence.db import session_scope
@@ -26,7 +27,10 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 def create_job(request: JobCreateRequest) -> JobResponse:
     with session_scope() as session:
         repository = JobRepository(session)
-        job = repository.create_job(status=JobStatus.PENDING, input_payload=request.input)
+        job = repository.create_job(
+            status=JobStatus.PENDING,
+            input_payload=request.build_input_payload(),
+        )
         repository.create_job_event(
             job.id,
             event_type=JobEventType.JOB_CREATED.value,
@@ -80,6 +84,14 @@ def start_job(job_id: UUID) -> JobResponse:
                 detail=make_api_error(
                     code="duplicate_job_start",
                     message="Job start is already in progress.",
+                ),
+            ) from error
+        except InferenceConfigurationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=make_api_error(
+                    code="invalid_inference_configuration",
+                    message=str(error),
                 ),
             ) from error
         except ValueError as error:

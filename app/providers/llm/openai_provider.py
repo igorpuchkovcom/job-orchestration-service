@@ -43,6 +43,8 @@ class OpenAIProvider:
         model: str,
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
+        base_url: str | None = None,
+        provider_name: str = "openai",
         client: OpenAI | None = None,
         sleep_fn: Callable[[float], None] | None = None,
     ) -> None:
@@ -55,10 +57,14 @@ class OpenAIProvider:
         if max_retries < 0:
             raise ValueError("OpenAI max_retries must be zero or greater.")
 
+        self.provider_name = provider_name
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
-        self.client = client or OpenAI(api_key=api_key, timeout=timeout_seconds)
+        client_kwargs: dict[str, object] = {"api_key": api_key, "timeout": timeout_seconds}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self.client = client or OpenAI(**client_kwargs)
         self._sleep = sleep_fn or time.sleep
 
     def generate_text(self, prompt: str) -> LLMGenerationResult:
@@ -82,7 +88,7 @@ class OpenAIProvider:
             raise RuntimeError("OpenAI returned empty text output.")
 
         return LLMGenerationResult(
-            provider="openai",
+            provider=self.provider_name,
             model=self.model,
             content=content,
             usage=self._extract_usage(response),
