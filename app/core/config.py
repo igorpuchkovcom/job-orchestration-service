@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/db"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    llm_runtime: Literal["openai_api", "openai_compatible_local", "vllm_compatible_stub"] = (
+        "openai_api"
+    )
+    openai_base_url: str | None = None
     openai_timeout_seconds: float = Field(default=30.0, gt=0)
     openai_max_retries: int = Field(default=2, ge=0, le=5)
     redis_url: str | None = None

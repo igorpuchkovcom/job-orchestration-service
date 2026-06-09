@@ -34,11 +34,13 @@ def test_orchestration_service_persists_completed_flow_for_pending_job(migrated_
         assert reloaded_job.steps[0].status == "completed"
         assert reloaded_job.steps[0].error_payload is None
         assert reloaded_job.steps[0].step_key == "llm_generate_text"
-        assert reloaded_job.steps[0].output_payload == {
-            "provider": "openai",
-            "model": "test-model",
-            "content": "provider-backed content",
-        }
+        output_payload = reloaded_job.steps[0].output_payload
+        assert output_payload is not None
+        assert output_payload["provider"] == "openai"
+        assert output_payload["model"] == "test-model"
+        assert output_payload["content"] == "provider-backed content"
+        assert isinstance(output_payload["latency_ms"], int)
+        assert output_payload["latency_ms"] >= 0
         assert [event.event_type for event in reloaded_job.events] == [
             "job_start_requested",
             "job_started",

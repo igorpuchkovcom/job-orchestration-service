@@ -26,6 +26,47 @@ def test_create_job_persists_and_returns_bounded_response(
     assert body["input_payload"] == {"prompt": "demo"}
     assert body["steps"] == []
     assert body["result_summary"] is None
+    assert body["job_type"] is None
+    assert body["model_id"] is None
+    assert body["runtime"] is None
+    assert body["resource_profile"] is None
+
+
+def test_create_job_accepts_optional_inference_metadata(
+    migrated_engine,
+    database_url,
+    operator_headers,
+) -> None:
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "input": {"prompt": "demo"},
+            "job_type": "inference",
+            "model_id": "openai:gpt-4o-mini",
+            "runtime": "openai_api",
+            "resource_profile": "cpu-small",
+        },
+        headers=operator_headers,
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["input_payload"] == {
+        "prompt": "demo",
+        "_inference": {
+            "job_type": "inference",
+            "model_id": "openai:gpt-4o-mini",
+            "runtime": "openai_api",
+            "resource_profile": "cpu-small",
+        },
+    }
+    assert body["job_type"] == "inference"
+    assert body["model_id"] == "openai:gpt-4o-mini"
+    assert body["runtime"] == "openai_api"
+    assert body["resource_profile"] == "cpu-small"
 
 
 def test_jobs_routes_are_visible_in_openapi() -> None:

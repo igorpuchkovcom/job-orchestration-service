@@ -83,6 +83,66 @@ Lifecycle events are append-only in `job_events` and currently include:
 
 For a supporting runbook of the create/start/get path, see [`docs/demo-flow.md`](docs/demo-flow.md).
 
+## OneAI follow-up spike: model-aware inference control plane
+
+Why this spike exists:
+
+- respond directly to interview feedback about framework choice and AI-platform boundaries;
+- keep the custom control plane intact while making runtime/model concerns more explicit.
+
+Feedback this addresses:
+
+- framework vs custom orchestration rationale;
+- model identity and runtime adapter boundary;
+- local/self-hosted OpenAI-compatible runtime boundary;
+- lightweight inference metrics in API-facing job outputs;
+- clear control-plane vs runtime responsibility split.
+
+What was added:
+
+- framework decision document: [`docs/framework-vs-custom-orchestration.md`](docs/framework-vs-custom-orchestration.md);
+- optional inference metadata (`job_type`, `model_id`, `runtime`, `resource_profile`) stored additively in `input_payload._inference`;
+- runtime boundary with `openai_api`, `openai_compatible_local`, and explicit `vllm_compatible_stub` placeholder;
+- minimal static in-memory model registry (`model_id -> runtime/provider_model/base_url`);
+- lightweight inference metrics (`latency_ms`, token counters when usage is present) in step output and `result_summary`.
+
+Why custom control plane remains justified:
+
+- this repo is still a deterministic one-step workflow where API/lifecycle/persistence/audit ownership is the core value;
+- adding LangGraph/LangChain first would be ceremonial for this bounded path.
+
+Where frameworks fit later:
+
+- LangGraph/LangChain when workflows become branching, multi-step, and agentic;
+- Celery/Temporal/Argo when durable async execution, retries across restarts, and long-running workloads become requirements.
+
+This spike demonstrates:
+
+- control-plane thinking and explicit service boundaries;
+- model/runtime separation at adapter level;
+- additive inference metadata and lightweight metrics;
+- framework judgment and learning velocity.
+
+This spike does not demonstrate:
+
+- production vLLM serving;
+- GPU scheduling;
+- Kubernetes or OpenNebula integration;
+- Hugging Face artifact lifecycle;
+- training/fine-tuning platform capabilities;
+- full observability stack;
+- async worker fleet execution model.
+
+How this could evolve toward a OneAI-like system:
+
+1. move orchestration execution to async workers;
+2. add real serving runtime adapters beyond OpenAI-compatible boundaries;
+3. add durable model artifact registry and lifecycle controls;
+4. add deployment target abstraction (Cloud Run/Kubernetes/OpenNebula drivers);
+5. integrate GPU/resource scheduling;
+6. add OpenTelemetry/Prometheus-grade observability;
+7. implement OpenNebula-native runtime/deployment integration.
+
 ## Tech Stack
 
 - FastAPI
@@ -137,6 +197,8 @@ Common local configuration lives in `.env`:
 - `REDIS_START_GUARD_TTL_SECONDS`: optional tuning for the duplicate-start guard TTL
 - `OPENAI_API_KEY`: only required for the live provider path
 - `OPENAI_MODEL`: optional, defaults to `gpt-4o-mini`
+- `LLM_RUNTIME`: optional, defaults to `openai_api`
+- `OPENAI_BASE_URL`: optional, used for `openai_compatible_local` runtime
 - `OPENAI_TIMEOUT_SECONDS`: optional, defaults to `30`
 - `OPENAI_MAX_RETRIES`: optional, defaults to `2`
 - `ENVIRONMENT`: optional, defaults to `development`

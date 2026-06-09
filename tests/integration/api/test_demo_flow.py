@@ -45,6 +45,9 @@ def test_demo_flow_proves_create_start_get_happy_path(
         "provider": "openai",
         "model": "test-model",
         "content": "provider-backed content",
+        "tokens_in": 11,
+        "tokens_out": 7,
+        "total_tokens": 18,
     }
 
     start_response = client.post(
@@ -59,11 +62,26 @@ def test_demo_flow_proves_create_start_get_happy_path(
     assert started["input_payload"] == {"prompt": "demo"}
     assert started["started_at"] is not None
     assert started["completed_at"] is not None
-    assert started["result_summary"] == expected_result
+    assert started["result_summary"]["provider"] == expected_result["provider"]
+    assert started["result_summary"]["model"] == expected_result["model"]
+    assert started["result_summary"]["content"] == expected_result["content"]
+    assert started["result_summary"]["tokens_in"] == expected_result["tokens_in"]
+    assert started["result_summary"]["tokens_out"] == expected_result["tokens_out"]
+    assert started["result_summary"]["total_tokens"] == expected_result["total_tokens"]
+    assert isinstance(started["result_summary"]["latency_ms"], int)
+    assert started["result_summary"]["latency_ms"] >= 0
     assert len(started["steps"]) == 1
     assert started["steps"][0]["step_key"] == "llm_generate_text"
     assert started["steps"][0]["status"] == "completed"
-    assert started["steps"][0]["output_payload"] == expected_result
+    output_payload = started["steps"][0]["output_payload"]
+    assert output_payload["provider"] == expected_result["provider"]
+    assert output_payload["model"] == expected_result["model"]
+    assert output_payload["content"] == expected_result["content"]
+    assert output_payload["tokens_in"] == expected_result["tokens_in"]
+    assert output_payload["tokens_out"] == expected_result["tokens_out"]
+    assert output_payload["total_tokens"] == expected_result["total_tokens"]
+    assert isinstance(output_payload["latency_ms"], int)
+    assert output_payload["latency_ms"] >= 0
 
     get_response = client.get(f"/api/v1/jobs/{job_id}", headers=viewer_headers)
     assert get_response.status_code == 200
@@ -86,6 +104,7 @@ def _fake_service_init_success(self, session) -> None:
             provider="openai",
             model="test-model",
             content="provider-backed content",
+            usage={"input_tokens": 11, "output_tokens": 7, "total_tokens": 18},
         )
     )
     self.start_guard = RedisStartGuard(redis_url=None, ttl_seconds=30)
